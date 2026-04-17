@@ -13,7 +13,7 @@ dev = ["pytest>=8.0", "pytest-mock>=3.0"]
 managed = true
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/core", "packages/storage", "packages/cli"]
 
 [tool.uv.sources]
 dgk-cli = { workspace = true }
