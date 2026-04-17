@@ -1,0 +1,308 @@
+from __future__ import annotations
+
+import json
+import subprocess
+
+from mcp.server import Server
+from mcp.types import Resource, TextContent, Tool
+from pydantic import AnyUrl
+
+from dgk_core.schemas import GraphNode, GraphRelationship
+from dgk_storage.neo4j_client import Neo4jClient, check_neo4j_health
+
+server = Server("dev-graph-kit")
+
+
+# ─── Pure sync helpers (testable) ─────────────────────────────────────────────
+
+def search_entities(arguments: dict, client: Neo4jClient) -> dict:
+    """graph.search_entities: search nodes by name/type."""
+    query = arguments.get("query", "")
+    labels = arguments.get("labels")
+    limit = arguments.get("limit", 20)
+    results = client.search_nodes(query, labels=labels, limit=limit)
+    entities = [r["n"] for r in results if "n" in r]
+    return {"entities": entities}
+
+
+def get_context(arguments: dict, client: Neo4jClient) -> dict:
+    """graph.get_context: nodes + relationships + summary for a query."""
+    query = arguments.get("query", "")
+    limit = arguments.get("limit", 20)
+    raw = client.search_nodes(query, limit=limit)
+    nodes = [r["n"] for r in raw if "n" in r]
+    node_ids = [n["id"] for n in nodes if "id" in n]
+    rels = client.get_node_relationships(node_ids) if node_ids else []
+    summary = f"Found {len(nodes)} node(s) related to '{query}'."
+    return {"nodes": nodes, "relationships": rels, "summary": summary}
+
+
+def get_neighbors(arguments: dict, client: Neo4jClient) -> dict:
+    """graph.get_neighbors: adjacent nodes with direction/type filters."""
+    node_id = arguments.get("nodeId", "")
+    direction = arguments.get("direction", "both")
+    rel_types = arguments.get("types")
+    depth = arguments.get("depth", 1)
+    return client.get_neighbors(node_id, direction=direction, rel_types=rel_types, depth=depth)
+
+
+def impact_analysis(arguments: dict, client: Neo4jClient) -> dict:
+    """graph.impact_analysis: dependents + risk score for a file path."""
+    target = arguments.get("target", "")
+    dependents = client.get_dependents(target, max_depth=5)
+    direct = [d for d in dependents if d.get("depth", 1) == 1]
+    transitive = [d for d in dependents if d.get("depth", 1) > 1]
+    risk_score = round(min(1.0, len(dependents) / 10.0), 2)
+    return {
+        "directlyAffected": direct,
+        "transitivelyAffected": transitive,
+        "riskScore": risk_score,
+        "recommendations": _build_recommendations(len(direct), len(transitive)),
+    }
+
+
+def _build_recommendations(n_direct: int, n_transitive: int) -> list[str]:
+    recs: list[str] = []
+    if n_direct > 0:
+        recs.append(f"Review {n_direct} directly dependent module(s).")
+    if n_transitive > 0:
+        recs.append(f"Check {n_transitive} transitively affected module(s).")
+    if not recs:
+        recs.append("No dependents found — safe to change.")
+    return recs
+
+
+def upsert_entities(arguments: dict, client: Neo4jClient) -> dict:
+    """graph.upsert_entities: create/update nodes."""
+    raw_entities = arguments.get("entities", [])
+    nodes = [GraphNode(**e) for e in raw_entities]
+    client.upsert_nodes(nodes)
+    return {"upserted": len(nodes)}
+
+
+def upsert_relations(arguments: dict, client: Neo4jClient) -> dict:
+    """graph.upsert_relations: create/update relationships."""
+    raw_relations = arguments.get("relations", [])
+    rels = [
+        GraphRelationship(
+            type=r["type"],
+            source_id=r["from"],
+            target_id=r["to"],
+            properties=r.get("properties", {}),
+        )
+        for r in raw_relations
+    ]
+    client.upsert_relationships(rels)
+    return {"upserted": len(rels)}
+
+
+def scan_project(arguments: dict) -> dict:
+    """scan.project: trigger full project scan via dgk scan."""
+    path = arguments.get("path", ".")
+    result = subprocess.run(["dgk", "scan", path], capture_output=True, text=True)
+    status = "ok" if result.returncode == 0 else "error"
+    return {"status": status, "output": result.stdout.strip()}
+
+
+def scan_file(arguments: dict) -> dict:
+    """scan.file: trigger single-file scan via dgk scan."""
+    path = arguments.get("path", "")
+    result = subprocess.run(["dgk", "scan", path], capture_output=True, text=True)
+    status = "ok" if result.returncode == 0 else "error"
+    return {"status": status, "output": result.stdout.strip()}
+
+
+def project_status(arguments: dict, client: Neo4jClient) -> dict:
+    """project.status: graph stats + service health."""
+    health = check_neo4j_health()
+    node_count = client.count_nodes()
+    return {"neo4j": health, "nodeCount": node_count}
+
+
+def get_schema() -> str:
+    """project://schema: graph schema as text."""
+    return (
+        "Node labels: Module, Function, Component, Hook, Class, "
+        "Type, Interface, Package\n"
+        "Relationships: IMPORTS, EXPOSES, DEPENDS_ON, CALLS, USES_TYPE"
+    )
+
+
+def get_summary(client: Neo4jClient) -> str:
+    """project://summary: project overview and stats."""
+    count = client.count_nodes()
+    return f"dev-graph-kit graph: {count} node(s) indexed."
+
+
+# ─── TOOL / RESOURCE definitions ──────────────────────────────────────────────
+
+TOOLS: list[Tool] = [
+    Tool(
+        name="graph.search_entities",
+        description="Search for entities by name/type",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "labels": {"type": "array", "items": {"type": "string"}},
+                "limit": {"type": "integer", "default": 20},
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
+        name="graph.get_context",
+        description="Get relevant code context for a query",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "default": 20},
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
+        name="graph.get_neighbors",
+        description="Get neighboring nodes with optional direction/type filters",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "nodeId": {"type": "string"},
+                "direction": {"type": "string", "enum": ["in", "out", "both"]},
+                "types": {"type": "array", "items": {"type": "string"}},
+                "depth": {"type": "integer", "default": 1},
+            },
+            "required": ["nodeId"],
+        },
+    ),
+    Tool(
+        name="graph.impact_analysis",
+        description="Analyze impact of changes to a file",
+        inputSchema={
+            "type": "object",
+            "properties": {"target": {"type": "string"}},
+            "required": ["target"],
+        },
+    ),
+    Tool(
+        name="graph.upsert_entities",
+        description="Create or update nodes in the code graph",
+        inputSchema={
+            "type": "object",
+            "properties": {"entities": {"type": "array"}},
+            "required": ["entities"],
+        },
+    ),
+    Tool(
+        name="graph.upsert_relations",
+        description="Create or update relationships",
+        inputSchema={
+            "type": "object",
+            "properties": {"relations": {"type": "array"}},
+            "required": ["relations"],
+        },
+    ),
+    Tool(
+        name="scan.project",
+        description="Full project scan",
+        inputSchema={
+            "type": "object",
+            "properties": {"path": {"type": "string", "default": "."}},
+        },
+    ),
+    Tool(
+        name="scan.file",
+        description="Scan a single file",
+        inputSchema={
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+    ),
+    Tool(
+        name="project.status",
+        description="Get project status — graph stats and service health",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+]
+
+RESOURCES: list[Resource] = [
+    Resource(
+        name="Schema",
+        uri=AnyUrl("project://schema"),
+        description="Graph schema (node/edge types)",
+        mimeType="text/plain",
+    ),
+    Resource(
+        name="Summary",
+        uri=AnyUrl("project://summary"),
+        description="Project overview and stats",
+        mimeType="text/plain",
+    ),
+]
+
+_TOOL_NAMES = {t.name for t in TOOLS}
+
+
+# ─── MCP server handlers ───────────────────────────────────────────────────────
+
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    return TOOLS
+
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    if name not in _TOOL_NAMES:
+        return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
+
+    client = Neo4jClient()
+    try:
+        match name:
+            case "graph.search_entities":
+                result = search_entities(arguments, client)
+            case "graph.get_context":
+                result = get_context(arguments, client)
+            case "graph.get_neighbors":
+                result = get_neighbors(arguments, client)
+            case "graph.impact_analysis":
+                result = impact_analysis(arguments, client)
+            case "graph.upsert_entities":
+                result = upsert_entities(arguments, client)
+            case "graph.upsert_relations":
+                result = upsert_relations(arguments, client)
+            case "scan.project":
+                client.close()
+                result = scan_project(arguments)
+                return [TextContent(type="text", text=json.dumps(result))]
+            case "scan.file":
+                client.close()
+                result = scan_file(arguments)
+                return [TextContent(type="text", text=json.dumps(result))]
+            case "project.status":
+                result = project_status(arguments, client)
+            case _:  # unreachable but satisfies type checker
+                result = {"error": f"Unknown tool: {name}"}
+        return [TextContent(type="text", text=json.dumps(result))]
+    finally:
+        client.close()
+
+
+@server.list_resources()
+async def list_resources() -> list[Resource]:
+    return RESOURCES
+
+
+@server.read_resource()
+async def read_resource(uri: AnyUrl) -> str:
+    uri_str = str(uri)
+    if uri_str == "project://schema":
+        return get_schema()
+    if uri_str == "project://summary":
+        client = Neo4jClient()
+        try:
+            return get_summary(client)
+        finally:
+            client.close()
+    raise ValueError(f"Unknown resource URI: {uri}")

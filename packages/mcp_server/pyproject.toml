@@ -3,19 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dgk-cli"
+name = "dgk-mcp"
 version = "0.1.0"
-description = "CLI for dev-graph-kit"
+description = "MCP server for dev-graph-kit"
 requires-python = ">=3.11"
-dependencies = ["click>=8.0", "dgk-core", "dgk-storage", "dgk-mcp"]
-
-[project.scripts]
-dgk = "dgk_cli.main:cli"
+dependencies = ["mcp>=1.0", "dgk-core", "dgk-storage"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/dgk_cli"]
+packages = ["src/dgk_mcp"]
 
 [tool.uv.sources]
 dgk-core = { workspace = true }
 dgk-storage = { workspace = true }
-dgk-mcp = { workspace = true }

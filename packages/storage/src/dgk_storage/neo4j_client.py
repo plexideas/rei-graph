@@ -80,3 +80,49 @@ class Neo4jClient:
         with self._driver.session() as session:
             result = session.run(cypher, {"path": file_path, "max_depth": max_depth})
             return [record.data() for record in result]
+
+    def get_neighbors(
+        self,
+        node_id: str,
+        direction: str = "both",
+        rel_types: list[str] | None = None,
+        depth: int = 1,
+    ) -> dict:
+        """Get neighboring nodes with optional direction and relationship type filters."""
+        rel_part = ":" + "|".join(rel_types) if rel_types else ""
+        depth_str = str(depth)
+        if direction == "out":
+            pattern = f"(n {{id: $node_id}})-[r{rel_part}*1..{depth_str}]->(m)"
+        elif direction == "in":
+            pattern = f"(n {{id: $node_id}})<-[r{rel_part}*1..{depth_str}]-(m)"
+        else:
+            pattern = f"(n {{id: $node_id}})-[r{rel_part}*1..{depth_str}]-(m)"
+        cypher = f"MATCH {pattern} RETURN DISTINCT m, type(last(r)) AS relType"
+        with self._driver.session() as session:
+            result = session.run(cypher, {"node_id": node_id})
+            nodes = []
+            rels = []
+            for record in result:
+                nodes.append(dict(record["m"]))
+                rels.append({"type": record["relType"]})
+        return {"nodes": nodes, "relationships": rels}
+
+    def get_node_relationships(self, node_ids: list[str]) -> list[dict]:
+        """Get all relationships between a set of nodes."""
+        with self._driver.session() as session:
+            result = session.run(
+                "MATCH (a)-[r]->(b) WHERE a.id IN $ids AND b.id IN $ids "
+                "RETURN a.id AS source, type(r) AS relType, b.id AS target",
+                {"ids": node_ids},
+            )
+            return [
+                {"type": r["relType"], "sourceId": r["source"], "targetId": r["target"]}
+                for r in result
+            ]
+
+    def count_nodes(self) -> int:
+        """Count total nodes in the graph."""
+        with self._driver.session() as session:
+            result = session.run("MATCH (n) RETURN count(n) AS count")
+            record = result.single()
+            return record["count"] if record else 0

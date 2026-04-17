@@ -197,3 +197,90 @@ class TestNeo4jClientGetDependents:
             query = mock_session.run.call_args[0][0]
             params = mock_session.run.call_args[0][1]
             assert params["max_depth"] == 3
+
+
+class TestNeo4jClientGetNeighbors:
+    def test_get_neighbors_queries_adjacent_nodes(self):
+        """get_neighbors returns nodes adjacent to the given node."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+
+        mock_record = MagicMock()
+        mock_record.__getitem__ = MagicMock(side_effect=lambda k: {"m": {"id": "module:src/utils.ts"}, "relType": "IMPORTS"}[k])
+
+        with patch.object(client, "_driver") as mock_driver:
+            mock_session = MagicMock()
+            mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+            mock_session.run.return_value = [mock_record]
+
+            result = client.get_neighbors("module:src/auth.ts", direction="out")
+
+            query = mock_session.run.call_args[0][0]
+            assert "node_id" in str(mock_session.run.call_args)
+            assert "->" in query  # outgoing direction
+            assert len(result["nodes"]) == 1
+            assert result["relationships"][0]["type"] == "IMPORTS"
+
+    def test_get_neighbors_in_direction_uses_incoming_arrow(self):
+        """get_neighbors with direction='in' uses incoming arrow in Cypher."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+
+        with patch.object(client, "_driver") as mock_driver:
+            mock_session = MagicMock()
+            mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+            mock_session.run.return_value = []
+
+            client.get_neighbors("module:src/auth.ts", direction="in")
+
+            query = mock_session.run.call_args[0][0]
+            assert "<-" in query  # incoming direction
+
+
+class TestNeo4jClientCountNodes:
+    def test_count_nodes_returns_integer(self):
+        """count_nodes returns the total number of nodes."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+
+        mock_record = MagicMock()
+        mock_record.__getitem__ = MagicMock(return_value=42)
+
+        with patch.object(client, "_driver") as mock_driver:
+            mock_session = MagicMock()
+            mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+            mock_session.run.return_value.single.return_value = mock_record
+
+            count = client.count_nodes()
+
+            assert count == 42
+            query = mock_session.run.call_args[0][0]
+            assert "count" in query.lower()
+
+
+class TestNeo4jClientGetNodeRelationships:
+    def test_get_node_relationships_returns_rels_between_given_ids(self):
+        """get_node_relationships returns relationships between a set of node IDs."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+
+        mock_record = MagicMock()
+        mock_record.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "source": "module:src/auth.ts",
+                "relType": "IMPORTS",
+                "target": "module:src/utils.ts",
+            }[k]
+        )
+
+        with patch.object(client, "_driver") as mock_driver:
+            mock_session = MagicMock()
+            mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+            mock_session.run.return_value = [mock_record]
+
+            results = client.get_node_relationships(["module:src/auth.ts", "module:src/utils.ts"])
+
+            assert len(results) == 1
+            assert results[0]["type"] == "IMPORTS"
+            assert results[0]["sourceId"] == "module:src/auth.ts"
+            assert results[0]["targetId"] == "module:src/utils.ts"
