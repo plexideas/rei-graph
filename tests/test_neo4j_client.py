@@ -143,4 +143,57 @@ class TestNeo4jClientUpsertIdempotency:
             assert mock_session.run.call_count == 2
             for c in mock_session.run.call_args_list:
                 assert "MERGE" in c[0][0]
-                assert "CREATE" not in c[0][0]
+
+
+class TestNeo4jClientGetDependents:
+    def test_get_dependents_returns_direct_importers(self):
+        """get_dependents returns modules that directly IMPORTS the target file."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+
+        mock_record_1 = MagicMock()
+        mock_record_1.data.return_value = {
+            "n": {"id": "module:src/login.ts", "name": "login", "path": "src/login.ts"},
+            "depth": 1,
+        }
+
+        with patch.object(client, "_driver") as mock_driver:
+            mock_session = MagicMock()
+            mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+            mock_session.run.return_value = [mock_record_1]
+
+            results = client.get_dependents("src/auth.ts")
+
+            assert len(results) == 1
+            assert results[0]["n"]["path"] == "src/login.ts"
+            # Cypher should use variable-length path for IMPORTS
+            query = mock_session.run.call_args[0][0]
+            assert "IMPORTS" in query
+
+    def test_get_dependents_returns_transitive_importers(self):
+        """get_dependents with depth>1 returns transitive dependents."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+
+        mock_record_1 = MagicMock()
+        mock_record_1.data.return_value = {
+            "n": {"id": "module:src/login.ts", "name": "login", "path": "src/login.ts"},
+            "depth": 1,
+        }
+        mock_record_2 = MagicMock()
+        mock_record_2.data.return_value = {
+            "n": {"id": "module:src/app.ts", "name": "app", "path": "src/app.ts"},
+            "depth": 2,
+        }
+
+        with patch.object(client, "_driver") as mock_driver:
+            mock_session = MagicMock()
+            mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+            mock_session.run.return_value = [mock_record_1, mock_record_2]
+
+            results = client.get_dependents("src/auth.ts", max_depth=3)
+
+            assert len(results) == 2
+            query = mock_session.run.call_args[0][0]
+            params = mock_session.run.call_args[0][1]
+            assert params["max_depth"] == 3

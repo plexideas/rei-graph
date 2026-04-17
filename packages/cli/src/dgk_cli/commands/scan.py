@@ -4,17 +4,18 @@ from pathlib import Path
 
 import click
 
+from dgk_core.config import read_config
 from dgk_core.schemas import GraphNode, GraphRelationship, ScanResult
 from dgk_storage.neo4j_client import Neo4jClient
+
+TS_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx"}
 
 
 def _find_ingester() -> Path:
     """Find the TS ingester dist/cli.js relative to the project."""
-    # Walk up from CWD looking for the ingester
     candidates = [
         Path.cwd() / "packages" / "ingester_ts" / "dist" / "cli.js",
     ]
-    # Also try relative to this file (for dev installs)
     this_dir = Path(__file__).resolve()
     for parent in this_dir.parents:
         candidate = parent / "packages" / "ingester_ts" / "dist" / "cli.js"
@@ -56,10 +57,56 @@ def _parse_ingester_output(raw: str) -> ScanResult:
     return ScanResult(file=data["file"], nodes=nodes, relationships=relationships)
 
 
+def _collect_files(root: Path) -> list[Path]:
+    """Walk project tree respecting include/exclude from .dgk/project.toml."""
+    config_path = root / ".dgk" / "project.toml"
+    include = ["src", "packages", "apps"]
+    exclude = ["dist", "build", "node_modules", ".next"]
+
+    if config_path.exists():
+        config = read_config(config_path)
+        scan_config = config.get("scan", {})
+        include = scan_config.get("include", include)
+        exclude = scan_config.get("exclude", exclude)
+
+    files: list[Path] = []
+    exclude_set = set(exclude)
+
+    for inc_dir in include:
+        search_root = root / inc_dir
+        if not search_root.is_dir():
+            continue
+        for filepath in search_root.rglob("*"):
+            if not filepath.is_file():
+                continue
+            if filepath.suffix not in TS_EXTENSIONS:
+                continue
+            # Check if any part of the relative path matches an exclude pattern
+            rel_parts = filepath.relative_to(root).parts
+            if any(part in exclude_set for part in rel_parts):
+                continue
+            files.append(filepath)
+
+    return sorted(files)
+
+
+def _scan_single_file(file_path: Path, ingester: Path) -> ScanResult | None:
+    """Scan a single file with the TS ingester."""
+    result = subprocess.run(
+        ["node", str(ingester), str(file_path.resolve())],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        click.echo(f"  Warning: failed to scan {file_path} — {result.stderr.strip()}")
+        return None
+    return _parse_ingester_output(result.stdout)
+
+
 @click.command()
 @click.argument("file_path")
 def scan(file_path: str):
-    """Scan a TypeScript/TSX file and add to the code graph."""
+    """Scan a TypeScript/TSX file or directory and add to the code graph."""
     path = Path(file_path)
     if not path.exists():
         click.echo(f"Error: file not found — {file_path}")
@@ -71,28 +118,53 @@ def scan(file_path: str):
         click.echo(f"Error: {e}")
         return
 
-    click.echo(f"Scanning {file_path}...")
+    if path.is_dir():
+        files = _collect_files(path)
+        if not files:
+            click.echo("No TS/TSX files found to scan.")
+            return
 
-    result = subprocess.run(
-        ["node", str(ingester), str(path.resolve())],
-        capture_output=True,
-        text=True,
-    )
+        click.echo(f"Scanning {len(files)} file(s)...")
+        total_nodes = 0
+        total_rels = 0
 
-    if result.returncode != 0:
-        click.echo(f"Error: ingester failed — {result.stderr.strip()}")
-        return
+        client = Neo4jClient()
+        try:
+            for f in files:
+                scan_result = _scan_single_file(f, ingester)
+                if scan_result:
+                    client.delete_file_nodes(scan_result.file)
+                    client.upsert_nodes(scan_result.nodes)
+                    client.upsert_relationships(scan_result.relationships)
+                    total_nodes += len(scan_result.nodes)
+                    total_rels += len(scan_result.relationships)
+        finally:
+            client.close()
 
-    scan_result = _parse_ingester_output(result.stdout)
+        click.echo(f"Done: {total_nodes} nodes, {total_rels} relationships from {len(files)} files")
+    else:
+        click.echo(f"Scanning {file_path}...")
 
-    client = Neo4jClient()
-    try:
-        client.upsert_nodes(scan_result.nodes)
-        client.upsert_relationships(scan_result.relationships)
-    finally:
-        client.close()
+        result = subprocess.run(
+            ["node", str(ingester), str(path.resolve())],
+            capture_output=True,
+            text=True,
+        )
 
-    click.echo(
-        f"Done: {len(scan_result.nodes)} nodes, "
-        f"{len(scan_result.relationships)} relationships"
-    )
+        if result.returncode != 0:
+            click.echo(f"Error: ingester failed — {result.stderr.strip()}")
+            return
+
+        scan_result = _parse_ingester_output(result.stdout)
+
+        client = Neo4jClient()
+        try:
+            client.upsert_nodes(scan_result.nodes)
+            client.upsert_relationships(scan_result.relationships)
+        finally:
+            client.close()
+
+        click.echo(
+            f"Done: {len(scan_result.nodes)} nodes, "
+            f"{len(scan_result.relationships)} relationships"
+        )

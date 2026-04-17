@@ -68,3 +68,15 @@ class Neo4jClient:
                 "MATCH (n {path: $path}) DETACH DELETE n",
                 {"path": file_path},
             )
+
+    def get_dependents(self, file_path: str, max_depth: int = 5) -> list[dict]:
+        """Find modules that directly or transitively import the given file."""
+        cypher = (
+            "MATCH (target:Module {path: $path}) "
+            "MATCH (n:Module)-[:IMPORTS*1..$max_depth]->(target) "
+            "WITH n, length(shortestPath((n)-[:IMPORTS*]->(target))) AS depth "
+            "RETURN n, depth ORDER BY depth"
+        ).replace("$max_depth", str(max_depth))
+        with self._driver.session() as session:
+            result = session.run(cypher, {"path": file_path, "max_depth": max_depth})
+            return [record.data() for record in result]

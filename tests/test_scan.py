@@ -1,5 +1,6 @@
 import json
-from unittest.mock import patch, MagicMock
+from pathlib import Path
+from unittest.mock import patch, MagicMock, call
 
 from click.testing import CliRunner
 
@@ -81,3 +82,220 @@ def test_scan_reports_file_not_found():
     result = runner.invoke(cli, ["scan", "/nonexistent/file.ts"])
     assert result.exit_code == 0
     assert "not found" in result.output.lower() or "error" in result.output.lower()
+
+
+def test_scan_directory_scans_all_ts_files(tmp_path):
+    """dgk scan <dir> walks the directory and scans all TS/TSX files."""
+    # Create project structure
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "auth.ts").write_text("export function login() {}")
+    (src / "utils.tsx").write_text("export function helper() {}")
+    (src / "readme.md").write_text("# docs")  # non-TS file, should be skipped
+
+    # Create .dgk/project.toml with include=["src"]
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Ingester should be called twice (auth.ts + utils.tsx), not for readme.md
+        assert mock_subprocess.run.call_count == 2
+        mock_client.close.assert_called_once()
+
+
+def test_scan_directory_respects_exclude_patterns(tmp_path):
+    """dgk scan <dir> respects exclude patterns from config."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "bundle.ts").write_text("export function bundle() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src", "dist"]\nexclude = ["dist"]\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Only src/app.ts should be scanned; dist/bundle.ts is excluded
+        assert mock_subprocess.run.call_count == 1
+
+
+def test_scan_directory_stores_resolved_import_paths(tmp_path):
+    """dgk scan <dir> stores IMPORTS relationships with resolved file paths, not raw specifiers."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "App.tsx").write_text("export function App() {}")
+    (src / "utils.ts").write_text("export function helper() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    # Simulate ingester returning resolved import path for App.tsx
+    app_output = json.dumps({
+        "file": "src/App.tsx",
+        "nodes": [
+            {"id": "module:src/App.tsx", "label": "Module", "name": "App",
+             "path": "src/App.tsx", "line": 1, "properties": {}},
+        ],
+        "relationships": [
+            {"type": "IMPORTS", "sourceId": "module:src/App.tsx",
+             "targetId": "module:src/utils.ts",
+             "properties": {"specifiers": ["helper"], "moduleSpecifier": "./utils"}},
+        ],
+    })
+    utils_output = json.dumps({
+        "file": "src/utils.ts",
+        "nodes": [
+            {"id": "module:src/utils.ts", "label": "Module", "name": "utils",
+             "path": "src/utils.ts", "line": 1, "properties": {}},
+        ],
+        "relationships": [],
+    })
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = ""
+        called_path = cmd[2]  # node <cli.js> <filepath>
+        if "App.tsx" in called_path:
+            result.stdout = app_output
+        else:
+            result.stdout = utils_output
+        return result
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert mock_subprocess.run.call_count == 2
+
+        # Collect all upserted relationships
+        all_rels = []
+        for c in mock_client.upsert_relationships.call_args_list:
+            all_rels.extend(c[0][0])
+
+        import_rels = [r for r in all_rels if r.type == "IMPORTS"]
+        assert len(import_rels) == 1
+        # The target should be a resolved file path, NOT the raw specifier
+        assert import_rels[0].target_id == "module:src/utils.ts"
+        assert "module:./utils" not in [r.target_id for r in all_rels]
+
+
+def test_scan_stores_package_nodes_and_depends_on(tmp_path):
+    """dgk scan stores Package nodes and DEPENDS_ON relationships for external imports."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "App.tsx").write_text("export function App() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    ingester_output = json.dumps({
+        "file": "src/App.tsx",
+        "nodes": [
+            {"id": "module:src/App.tsx", "label": "Module", "name": "App",
+             "path": "src/App.tsx", "line": 1, "properties": {}},
+            {"id": "package:react", "label": "Package", "name": "react",
+             "path": "", "line": 0, "properties": {"external": True}},
+        ],
+        "relationships": [
+            {"type": "IMPORTS", "sourceId": "module:src/App.tsx",
+             "targetId": "module:react",
+             "properties": {"specifiers": ["React"], "moduleSpecifier": "react"}},
+            {"type": "DEPENDS_ON", "sourceId": "module:src/App.tsx",
+             "targetId": "package:react", "properties": {}},
+        ],
+    })
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ingester_output
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+
+        # Verify Package node was upserted
+        all_nodes = []
+        for c in mock_client.upsert_nodes.call_args_list:
+            all_nodes.extend(c[0][0])
+        package_nodes = [n for n in all_nodes if n.label == "Package"]
+        assert len(package_nodes) == 1
+        assert package_nodes[0].name == "react"
+
+        # Verify DEPENDS_ON relationship was upserted
+        all_rels = []
+        for c in mock_client.upsert_relationships.call_args_list:
+            all_rels.extend(c[0][0])
+        depends_rels = [r for r in all_rels if r.type == "DEPENDS_ON"]
+        assert len(depends_rels) == 1
+        assert depends_rels[0].target_id == "package:react"

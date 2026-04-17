@@ -1,5 +1,6 @@
 import { Project, SourceFile, SyntaxKind, Node as TSNode } from "ts-morph";
 import * as path from "path";
+import * as fs from "fs";
 
 export interface GraphNode {
   id: string;
@@ -36,6 +37,35 @@ function isReactComponent(name: string): boolean {
 
 function isReactHook(name: string): boolean {
   return /^use[A-Z]/.test(name);
+}
+
+const TS_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"];
+
+function resolveRelativeImport(sourceFilePath: string, specifier: string): string {
+  if (!specifier.startsWith(".")) {
+    return specifier; // External package, keep as-is
+  }
+
+  const sourceDir = path.dirname(sourceFilePath);
+  const resolved = path.resolve(sourceDir, specifier);
+
+  // Try direct file with extensions
+  for (const ext of TS_EXTENSIONS) {
+    if (fs.existsSync(resolved + ext)) {
+      return path.relative(process.cwd(), resolved + ext).replace(/\\/g, "/");
+    }
+  }
+
+  // Try index files in directory
+  for (const ext of TS_EXTENSIONS) {
+    const indexPath = path.join(resolved, `index${ext}`);
+    if (fs.existsSync(indexPath)) {
+      return path.relative(process.cwd(), indexPath).replace(/\\/g, "/");
+    }
+  }
+
+  // Fallback: return resolved path without extension
+  return path.relative(process.cwd(), resolved).replace(/\\/g, "/");
 }
 
 export function parseFile(filePath: string): ScanResult {
@@ -203,7 +233,8 @@ export function parseFile(filePath: string): ScanResult {
   // Import declarations
   for (const imp of sourceFile.getImportDeclarations()) {
     const moduleSpecifier = imp.getModuleSpecifierValue();
-    const targetModuleId = makeId("module", moduleSpecifier);
+    const resolvedTarget = resolveRelativeImport(filePath, moduleSpecifier);
+    const targetModuleId = makeId("module", resolvedTarget);
 
     const namedImports = imp.getNamedImports().map((n) => n.getName());
     const defaultImport = imp.getDefaultImport()?.getText();
@@ -220,6 +251,34 @@ export function parseFile(filePath: string): ScanResult {
       targetId: targetModuleId,
       properties: { specifiers, moduleSpecifier },
     });
+
+    // For external packages, create a Package node and DEPENDS_ON relationship
+    if (!moduleSpecifier.startsWith(".")) {
+      const packageName = moduleSpecifier.startsWith("@")
+        ? moduleSpecifier.split("/").slice(0, 2).join("/")
+        : moduleSpecifier.split("/")[0];
+
+      const packageId = makeId("package", packageName);
+
+      // Only add the package node if we haven't seen it yet
+      if (!nodes.some((n) => n.id === packageId)) {
+        nodes.push({
+          id: packageId,
+          label: "Package",
+          name: packageName,
+          path: "",
+          line: 0,
+          properties: { external: true },
+        });
+      }
+
+      relationships.push({
+        type: "DEPENDS_ON",
+        sourceId: moduleId,
+        targetId: packageId,
+        properties: {},
+      });
+    }
   }
 
   return { file: normalizedPath, nodes, relationships };
