@@ -1,0 +1,24 @@
+[project]
+name = "dev-graph-kit"
+version = "0.1.0"
+description = "Local-first developer memory + DAG execution layer for coding agents"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = ["dgk-cli"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-mock>=3.0"]
+
+[tool.uv]
+managed = true
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+dgk-cli = { workspace = true }
+dgk-core = { workspace = true }
+dgk-storage = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
