@@ -15,6 +15,7 @@ def init():
         return
 
     project_name = Path.cwd().name
-    config = generate_default_config(project_name)
+    project_id = str(Path.cwd().resolve())
+    config = generate_default_config(project_name, project_id=project_id)
     write_config(config_path, config)
     click.echo(f"Initialized dev-graph-kit in .dgk/project.toml")

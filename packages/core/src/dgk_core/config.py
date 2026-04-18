@@ -26,9 +26,12 @@ DEFAULT_CONFIG = {
 }
 
 
-def generate_default_config(project_name: str) -> dict:
+def generate_default_config(project_name: str, project_id: str | None = None) -> dict:
     config = DEFAULT_CONFIG.copy()
-    config["project"] = {**config["project"], "name": project_name}
+    project = {**config["project"], "name": project_name}
+    if project_id:
+        project["id"] = project_id
+    config["project"] = project
     return config
 
 

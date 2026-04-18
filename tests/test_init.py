@@ -37,3 +37,17 @@ def test_init_does_not_overwrite_existing(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "already initialized" in result.output.lower()
     assert (dgk_dir / "project.toml").read_text() == "# custom config\n"
+
+
+def test_init_writes_project_id_as_absolute_path(tmp_path, monkeypatch):
+    """dgk init writes project_id (resolved absolute path) into .dgk/project.toml."""
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init"])
+    assert result.exit_code == 0
+
+    config_path = tmp_path / ".dgk" / "project.toml"
+    with open(config_path, "rb") as f:
+        config = tomllib.load(f)
+
+    assert config["project"]["id"] == str(tmp_path)
