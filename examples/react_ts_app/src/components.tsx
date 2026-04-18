@@ -2,6 +2,16 @@ import React from "react";
 import { useAuth } from "./hooks";
 import { validateEmail } from "./utils";
 
+export function NavBar({ title }: { title: string }) {
+  const { user } = useAuth();
+  return React.createElement(
+    "nav",
+    null,
+    React.createElement("span", null, title),
+    user ? React.createElement("span", null, `Hello, ${user.name}`) : null
+  );
+}
+
 export function LoginForm() {
   const { status, login } = useAuth();
   const [email, setEmail] = React.useState("");
