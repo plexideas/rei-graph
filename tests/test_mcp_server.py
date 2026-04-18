@@ -13,6 +13,13 @@ from dgk_mcp.server import (
     search_entities,
     upsert_entities,
     upsert_relations,
+    memory_record_analysis,
+    memory_record_decision,
+    memory_record_change,
+    memory_record_validation,
+    memory_record_plan,
+    memory_get_recent_context,
+    get_recent_decisions,
     TOOLS,
     RESOURCES,
 )

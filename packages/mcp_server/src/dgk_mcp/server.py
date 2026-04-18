@@ -9,6 +9,7 @@ from pydantic import AnyUrl
 
 from dgk_core.schemas import GraphNode, GraphRelationship
 from dgk_storage.neo4j_client import Neo4jClient, check_neo4j_health
+from dgk_storage.memory_client import MemoryClient
 
 server = Server("dev-graph-kit")
 
@@ -134,6 +135,83 @@ def get_summary(client: Neo4jClient) -> str:
     return f"dev-graph-kit graph: {count} node(s) indexed."
 
 
+# ─── Memory helpers (testable) ────────────────────────────────────────────────
+
+def memory_record_analysis(arguments: dict, mem: MemoryClient) -> dict:
+    """memory.record_analysis: store an Analysis memory node."""
+    analysis_id = mem.record_analysis(
+        scope=arguments["scope"],
+        findings=arguments["findings"],
+        related_nodes=arguments.get("relatedNodes"),
+    )
+    return {"analysisId": analysis_id}
+
+
+def memory_record_decision(arguments: dict, mem: MemoryClient) -> dict:
+    """memory.record_decision: store a Decision memory node."""
+    decision_id = mem.record_decision(
+        context=arguments["context"],
+        choice=arguments["choice"],
+        rationale=arguments["rationale"],
+        based_on=arguments.get("basedOn"),
+    )
+    return {"decisionId": decision_id}
+
+
+def memory_record_change(arguments: dict, mem: MemoryClient) -> dict:
+    """memory.record_change: store a Change memory node."""
+    change_id = mem.record_change(
+        change_type=arguments["type"],
+        description=arguments["description"],
+        affected_files=arguments.get("affectedFiles"),
+    )
+    return {"changeId": change_id}
+
+
+def memory_record_validation(arguments: dict, mem: MemoryClient) -> dict:
+    """memory.record_validation: store a Validation memory node."""
+    validation_id = mem.record_validation(
+        val_type=arguments["type"],
+        status=arguments["status"],
+        details=arguments["details"],
+        validates=arguments.get("validates"),
+    )
+    return {"validationId": validation_id}
+
+
+def memory_record_plan(arguments: dict, mem: MemoryClient) -> dict:
+    """memory.record_plan: store a Plan memory node."""
+    plan_id = mem.record_plan(
+        goal=arguments["goal"],
+        steps=arguments["steps"],
+        targets=arguments.get("targets"),
+    )
+    return {"planId": plan_id}
+
+
+def memory_get_recent_context(arguments: dict, mem: MemoryClient) -> dict:
+    """memory.get_recent_context: retrieve relevant memory nodes by query."""
+    memories = mem.get_recent_context(
+        query=arguments["query"],
+        limit=arguments.get("limit", 10),
+    )
+    return {"memories": memories}
+
+
+def get_recent_decisions(mem: MemoryClient) -> str:
+    """project://recent-decisions: format recent Decision nodes as text."""
+    decisions = mem.get_recent_decisions()
+    if not decisions:
+        return "No decisions recorded yet."
+    lines = []
+    for d in decisions:
+        choice = d.get("choice", "(unknown)")
+        rationale = d.get("rationale", "")
+        timestamp = d.get("timestamp", "")
+        lines.append(f"- [{timestamp}] {choice}: {rationale}")
+    return "\n".join(lines)
+
+
 # ─── TOOL / RESOURCE definitions ──────────────────────────────────────────────
 
 TOOLS: list[Tool] = [
@@ -225,6 +303,85 @@ TOOLS: list[Tool] = [
         description="Get project status — graph stats and service health",
         inputSchema={"type": "object", "properties": {}},
     ),
+    Tool(
+        name="memory.record_analysis",
+        description="Record an agent analysis session",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "scope": {"type": "string"},
+                "findings": {"type": "string"},
+                "relatedNodes": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["scope", "findings"],
+        },
+    ),
+    Tool(
+        name="memory.record_decision",
+        description="Record a decision with rationale",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "context": {"type": "string"},
+                "choice": {"type": "string"},
+                "rationale": {"type": "string"},
+                "basedOn": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["context", "choice", "rationale"],
+        },
+    ),
+    Tool(
+        name="memory.record_change",
+        description="Record a code change",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "enum": ["refactor", "feature", "fix", "chore"]},
+                "description": {"type": "string"},
+                "affectedFiles": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["type", "description"],
+        },
+    ),
+    Tool(
+        name="memory.record_validation",
+        description="Record validation or test results",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "enum": ["test", "lint", "typecheck", "review"]},
+                "status": {"type": "string", "enum": ["passed", "failed"]},
+                "details": {"type": "string"},
+                "validates": {"type": "string"},
+            },
+            "required": ["type", "status", "details"],
+        },
+    ),
+    Tool(
+        name="memory.record_plan",
+        description="Record a multi-step plan",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string"},
+                "steps": {"type": "array", "items": {"type": "string"}},
+                "targets": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["goal", "steps"],
+        },
+    ),
+    Tool(
+        name="memory.get_recent_context",
+        description="Retrieve relevant memory context by query",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "default": 10},
+            },
+            "required": ["query"],
+        },
+    ),
 ]
 
 RESOURCES: list[Resource] = [
@@ -240,6 +397,12 @@ RESOURCES: list[Resource] = [
         description="Project overview and stats",
         mimeType="text/plain",
     ),
+    Resource(
+        name="Recent Decisions",
+        uri=AnyUrl("project://recent-decisions"),
+        description="Last N agent decisions",
+        mimeType="text/plain",
+    ),
 ]
 
 _TOOL_NAMES = {t.name for t in TOOLS}
@@ -252,10 +415,43 @@ async def list_tools() -> list[Tool]:
     return TOOLS
 
 
+_MEMORY_TOOL_NAMES = {
+    "memory.record_analysis",
+    "memory.record_decision",
+    "memory.record_change",
+    "memory.record_validation",
+    "memory.record_plan",
+    "memory.get_recent_context",
+}
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     if name not in _TOOL_NAMES:
         return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
+
+    # Memory tools use MemoryClient, not Neo4jClient
+    if name in _MEMORY_TOOL_NAMES:
+        mem = MemoryClient()
+        try:
+            match name:
+                case "memory.record_analysis":
+                    result = memory_record_analysis(arguments, mem)
+                case "memory.record_decision":
+                    result = memory_record_decision(arguments, mem)
+                case "memory.record_change":
+                    result = memory_record_change(arguments, mem)
+                case "memory.record_validation":
+                    result = memory_record_validation(arguments, mem)
+                case "memory.record_plan":
+                    result = memory_record_plan(arguments, mem)
+                case "memory.get_recent_context":
+                    result = memory_get_recent_context(arguments, mem)
+                case _:
+                    result = {"error": f"Unknown memory tool: {name}"}
+            return [TextContent(type="text", text=json.dumps(result))]
+        finally:
+            mem.close()
 
     client = Neo4jClient()
     try:
@@ -305,4 +501,10 @@ async def read_resource(uri: AnyUrl) -> str:
             return get_summary(client)
         finally:
             client.close()
+    if uri_str == "project://recent-decisions":
+        mem = MemoryClient()
+        try:
+            return get_recent_decisions(mem)
+        finally:
+            mem.close()
     raise ValueError(f"Unknown resource URI: {uri}")
