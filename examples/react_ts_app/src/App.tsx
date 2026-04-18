@@ -8,6 +8,6 @@ export function App() {
     React.createElement(NavBar, { title: "My App" }),
     React.createElement("h1", null, "My App"),
     React.createElement(LoginForm, null),
-    React.createElement(UserProfile, { userId: "1" })
+    React.createElement(UserProfile, { userId: "1" }),
   );
 }

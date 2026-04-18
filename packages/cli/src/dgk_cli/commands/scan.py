@@ -1,5 +1,6 @@
 import json
 import subprocess
+import time
 from pathlib import Path
 
 import click
@@ -7,6 +8,7 @@ import click
 from dgk_core.config import read_config
 from dgk_core.schemas import GraphNode, GraphRelationship, ScanResult
 from dgk_storage.neo4j_client import Neo4jClient
+from dgk_cli.progress import ScanProgress
 
 TS_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx"}
 
@@ -156,9 +158,11 @@ def scan(file_path: str, changed: bool):
             click.echo("No TS/TSX files found to scan.")
             return
 
-        click.echo(f"Scanning {len(files)} file(s)...")
+        progress = ScanProgress(total=len(files))
+        progress.start()
         total_nodes = 0
         total_rels = 0
+        start_time = time.monotonic()
 
         client = Neo4jClient()
         try:
@@ -170,10 +174,12 @@ def scan(file_path: str, changed: bool):
                     client.upsert_relationships(scan_result.relationships)
                     total_nodes += len(scan_result.nodes)
                     total_rels += len(scan_result.relationships)
+                progress.advance(str(f), len(scan_result.nodes) if scan_result else 0, len(scan_result.relationships) if scan_result else 0)
         finally:
             client.close()
 
-        click.echo(f"Done: {total_nodes} nodes, {total_rels} relationships from {len(files)} files")
+        elapsed = time.monotonic() - start_time
+        progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
     else:
         click.echo(f"Scanning {file_path}...")
 

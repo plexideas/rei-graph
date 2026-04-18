@@ -15,7 +15,11 @@ export function findUserByEmail(email: string): User | undefined {
 }
 
 export function createUser(data: Omit<User, "id" | "createdAt">): User {
-  const user: User = { ...data, id: crypto.randomUUID(), createdAt: new Date() };
+  const user: User = {
+    ...data,
+    id: crypto.randomUUID(),
+    createdAt: new Date(),
+  };
   users.set(user.id, user);
   return user;
 }
@@ -30,6 +34,10 @@ export function createPost(data: Omit<Post, "id">): Post {
   return post;
 }
 
-export function makeError(code: string, message: string, status: number): ApiError {
+export function makeError(
+  code: string,
+  message: string,
+  status: number,
+): ApiError {
   return { code, message, status };
 }

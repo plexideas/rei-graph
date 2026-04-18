@@ -8,17 +8,24 @@ export const userRouter = Router();
 userRouter.get("/:id", requireAuth, (req: Request, res: Response) => {
   const user = findUserById(req.params.id);
   if (!user) {
-    res.status(404).json({ code: "NOT_FOUND", message: "User not found", status: 404 });
+    res
+      .status(404)
+      .json({ code: "NOT_FOUND", message: "User not found", status: 404 });
     return;
   }
   res.json(user);
 });
 
-userRouter.post("/", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
-  const { name, email, role } = req.body;
-  const user = createUser({ name, email, role });
-  res.status(201).json(user);
-});
+userRouter.post(
+  "/",
+  requireAuth,
+  requireRole("admin"),
+  (req: Request, res: Response) => {
+    const { name, email, role } = req.body;
+    const user = createUser({ name, email, role });
+    res.status(201).json(user);
+  },
+);
 
 userRouter.get("/:id/posts", requireAuth, (req: Request, res: Response) => {
   const posts = findPostsByAuthor(req.params.id);

@@ -7,7 +7,7 @@ name = "dgk-cli"
 version = "0.1.0"
 description = "CLI for dev-graph-kit"
 requires-python = ">=3.11"
-dependencies = ["click>=8.0", "dgk-core", "dgk-storage", "dgk-mcp"]
+dependencies = ["click>=8.0", "rich>=13.0", "dgk-core", "dgk-storage", "dgk-mcp"]
 
 [project.scripts]
 dgk = "dgk_cli.main:cli"

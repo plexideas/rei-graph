@@ -1023,7 +1023,7 @@ def build_code_graph(context, scan_result):
 def record_scan_memory(context, graph_result):
     """Record scan in memory layer."""
     pass
-
+Why 
 @job
 def full_scan_job():
     result = scan_files()

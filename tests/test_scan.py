@@ -419,3 +419,41 @@ def test_scan_changed_removes_nodes_for_deleted_files(tmp_path):
         # delete_file_nodes was called for the deleted file
         mock_client.delete_file_nodes.assert_called_with("src/deleted.ts")
 
+
+# ── Phase 1: progress bar + enriched summary ─────────────────────────────────
+
+def test_scan_directory_summary_contains_elapsed_time(tmp_path):
+    """dgk scan <dir> summary line includes elapsed time (e.g. 'Done in Xs')."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Done in" in result.output
+        assert "nodes" in result.output
+        assert "rels" in result.output
+        assert "files" in result.output
+
