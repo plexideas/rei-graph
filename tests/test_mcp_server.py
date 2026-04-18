@@ -10,6 +10,8 @@ from dgk_mcp.server import (
     project_status,
     scan_file,
     scan_project,
+    scan_changed_files,
+    project_snapshot,
     search_entities,
     upsert_entities,
     upsert_relations,
@@ -638,4 +640,84 @@ class TestDagToolsAndResourcesRegistered:
     def test_plan_resource_registered(self):
         uris = {str(r.uri) for r in RESOURCES}
         assert any(u.startswith("plan://") for u in uris)
+
+
+# ─── scan.changed_files ────────────────────────────────────────────────────────
+
+class TestScanChangedFiles:
+    def test_scan_changed_files_calls_dgk_scan_changed(self, tmp_path):
+        """scan_changed_files runs dgk scan --changed for the given path."""
+        from unittest.mock import patch
+        from dgk_mcp.server import scan_changed_files
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Done: 2 nodes, 1 relationships from 1 changed files"
+
+        with patch("dgk_mcp.server.subprocess") as mock_subprocess:
+            mock_subprocess.run.return_value = mock_result
+            result = scan_changed_files({"path": str(tmp_path)})
+
+        mock_subprocess.run.assert_called_once_with(
+            ["dgk", "scan", str(tmp_path), "--changed"],
+            capture_output=True,
+            text=True,
+        )
+        assert result["status"] == "ok"
+        assert "2 nodes" in result["output"]
+
+    def test_scan_changed_files_returns_error_on_failure(self, tmp_path):
+        """scan_changed_files returns error status when command fails."""
+        from unittest.mock import patch
+        from dgk_mcp.server import scan_changed_files
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = "Error: no git repo"
+
+        with patch("dgk_mcp.server.subprocess") as mock_subprocess:
+            mock_subprocess.run.return_value = mock_result
+            result = scan_changed_files({"path": str(tmp_path)})
+
+        assert result["status"] == "error"
+
+
+class TestProjectSnapshot:
+    def test_project_snapshot_calls_save_snapshot(self, tmp_path):
+        """project_snapshot instantiates SnapshotClient and saves snapshot."""
+        from unittest.mock import patch
+        from dgk_mcp.server import project_snapshot
+
+        expected_path = str(tmp_path / "default" / "snapshots" / "snap_001.json")
+        mock_client = MagicMock()
+        mock_client.save_snapshot.return_value = expected_path
+
+        with patch("dgk_mcp.server.SnapshotClient", return_value=mock_client):
+            result = project_snapshot({"snapshot_dir": str(tmp_path), "project_id": "default"})
+
+        mock_client.save_snapshot.assert_called_once()
+        assert result["status"] == "ok"
+        assert result["path"] == expected_path
+
+    def test_project_snapshot_uses_default_snapshot_dir(self, tmp_path):
+        """project_snapshot uses ~/.dev-graph-kit/snapshots when no dir given."""
+        from unittest.mock import patch
+        from dgk_mcp.server import project_snapshot
+
+        mock_client = MagicMock()
+        mock_client.save_snapshot.return_value = "/some/path"
+
+        with patch("dgk_mcp.server.SnapshotClient", return_value=mock_client):
+            result = project_snapshot({})
+
+        mock_client.save_snapshot.assert_called_once()
+        assert result["status"] == "ok"
+
+
+class TestPhase7ToolsRegistered:
+    def test_scan_changed_files_in_tools(self):
+        assert "scan.changed_files" in {t.name for t in TOOLS}
+
+    def test_project_snapshot_in_tools(self):
+        assert "project.snapshot" in {t.name for t in TOOLS}
 

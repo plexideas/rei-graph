@@ -11,6 +11,7 @@ from dgk_core.schemas import GraphNode, GraphRelationship
 from dgk_storage.neo4j_client import Neo4jClient, check_neo4j_health
 from dgk_storage.memory_client import MemoryClient
 from dgk_storage.dag_client import DagClient
+from dgk_storage.snapshot_client import SnapshotClient
 
 server = Server("dev-graph-kit")
 
@@ -112,6 +113,38 @@ def scan_file(arguments: dict) -> dict:
     result = subprocess.run(["dgk", "scan", path], capture_output=True, text=True)
     status = "ok" if result.returncode == 0 else "error"
     return {"status": status, "output": result.stdout.strip()}
+
+
+def scan_changed_files(arguments: dict) -> dict:
+    """scan.changed_files: incrementally scan git-changed files via dgk scan --changed."""
+    from pathlib import Path
+
+    path = arguments.get("path", ".")
+    result = subprocess.run(
+        ["dgk", "scan", path, "--changed"], capture_output=True, text=True
+    )
+    status = "ok" if result.returncode == 0 else "error"
+    return {"status": status, "output": result.stdout.strip()}
+
+
+def project_snapshot(arguments: dict) -> dict:
+    """project.snapshot: export current graph state to a snapshot file."""
+    from pathlib import Path
+
+    snapshot_dir = arguments.get("snapshot_dir")
+    project_id = arguments.get("project_id", "default")
+    if snapshot_dir is None:
+        snapshot_dir = Path.home() / ".dev-graph-kit" / "snapshots"
+    else:
+        snapshot_dir = Path(snapshot_dir)
+
+    client = SnapshotClient()
+    try:
+        path = client.save_snapshot(snapshot_dir, project_id)
+    finally:
+        client.close()
+
+    return {"status": "ok", "path": path}
 
 
 def project_status(arguments: dict, client: Neo4jClient) -> dict:
@@ -347,6 +380,25 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {"path": {"type": "string"}},
             "required": ["path"],
+        },
+    ),
+    Tool(
+        name="scan.changed_files",
+        description="Incrementally scan only git-changed TypeScript/TSX files",
+        inputSchema={
+            "type": "object",
+            "properties": {"path": {"type": "string", "default": "."}},
+        },
+    ),
+    Tool(
+        name="project.snapshot",
+        description="Export the current graph state to a JSON snapshot file",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "snapshot_dir": {"type": "string"},
+                "project_id": {"type": "string", "default": "default"},
+            },
         },
     ),
     Tool(
@@ -619,6 +671,14 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             case "scan.file":
                 client.close()
                 result = scan_file(arguments)
+                return [TextContent(type="text", text=json.dumps(result))]
+            case "scan.changed_files":
+                client.close()
+                result = scan_changed_files(arguments)
+                return [TextContent(type="text", text=json.dumps(result))]
+            case "project.snapshot":
+                client.close()
+                result = project_snapshot(arguments)
                 return [TextContent(type="text", text=json.dumps(result))]
             case "project.status":
                 result = project_status(arguments, client)

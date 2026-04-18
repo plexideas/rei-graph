@@ -103,13 +103,45 @@ def _scan_single_file(file_path: Path, ingester: Path) -> ScanResult | None:
     return _parse_ingester_output(result.stdout)
 
 
+def _get_changed_files(root: Path) -> list[str]:
+    """Return list of git-changed TS/TSX file paths relative to root."""
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=root,
+    )
+    if result.returncode != 0:
+        return []
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return [p for p in lines if Path(p).suffix in TS_EXTENSIONS]
+
+
+def _get_deleted_files(root: Path) -> list[str]:
+    """Return list of git-deleted file paths relative to root."""
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=D", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=root,
+    )
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
 @click.command()
 @click.argument("file_path")
-def scan(file_path: str):
+@click.option("--changed", is_flag=True, default=False, help="Only scan git-changed files")
+def scan(file_path: str, changed: bool):
     """Scan a TypeScript/TSX file or directory and add to the code graph."""
     path = Path(file_path)
     if not path.exists():
         click.echo(f"Error: file not found — {file_path}")
+        return
+
+    if changed:
+        _scan_changed(path)
         return
 
     try:
@@ -168,3 +200,54 @@ def scan(file_path: str):
             f"Done: {len(scan_result.nodes)} nodes, "
             f"{len(scan_result.relationships)} relationships"
         )
+
+
+def _scan_changed(root: Path) -> None:
+    """Scan only git-changed files and remove nodes for deleted files."""
+    # Remove nodes for deleted files first
+    deleted = _get_deleted_files(root)
+    changed = _get_changed_files(root)
+
+    # Filter out deleted files from changed list
+    deleted_set = set(deleted)
+    to_scan = [p for p in changed if p not in deleted_set]
+
+    if not to_scan and not deleted:
+        click.echo("No changed files found.")
+        return
+
+    client = Neo4jClient()
+    try:
+        for rel_path in deleted:
+            client.delete_file_nodes(rel_path)
+
+        if not to_scan:
+            click.echo(f"No changed TS/TSX files to scan (removed {len(deleted)} file(s)).")
+            return
+
+        try:
+            ingester = _find_ingester()
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}")
+            return
+
+        click.echo(f"Scanning {len(to_scan)} changed file(s)...")
+        total_nodes = 0
+        total_rels = 0
+
+        for rel_path in to_scan:
+            file_path = root / rel_path
+            if not file_path.exists():
+                continue
+            scan_result = _scan_single_file(file_path, ingester)
+            if scan_result:
+                client.delete_file_nodes(scan_result.file)
+                client.upsert_nodes(scan_result.nodes)
+                client.upsert_relationships(scan_result.relationships)
+                total_nodes += len(scan_result.nodes)
+                total_rels += len(scan_result.relationships)
+    finally:
+        client.close()
+
+    click.echo(f"Done: {total_nodes} nodes, {total_rels} relationships from {len(to_scan)} changed files")
+

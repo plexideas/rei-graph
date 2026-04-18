@@ -8,6 +8,7 @@ from dgk_cli.commands.mcp import mcp_command
 from dgk_cli.commands.plan import plan, plans
 from dgk_cli.commands.query import query
 from dgk_cli.commands.scan import scan
+from dgk_cli.commands.snapshot import snapshot
 
 
 @click.group()
@@ -20,6 +21,7 @@ cli.add_command(init)
 cli.add_command(dev)
 cli.add_command(doctor)
 cli.add_command(scan)
+cli.add_command(snapshot)
 cli.add_command(query)
 cli.add_command(impact)
 cli.add_command(plan)

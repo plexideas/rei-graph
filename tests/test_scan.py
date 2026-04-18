@@ -299,3 +299,123 @@ def test_scan_stores_package_nodes_and_depends_on(tmp_path):
         depends_rels = [r for r in all_rels if r.type == "DEPENDS_ON"]
         assert len(depends_rels) == 1
         assert depends_rels[0].target_id == "package:react"
+
+
+# ─── scan --changed ───────────────────────────────────────────────────────────
+
+def test_scan_changed_only_scans_git_modified_files(tmp_path):
+    """dgk scan --changed uses git diff to detect modified files and scans only those."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "auth.ts").write_text("export function login() {}")
+    (src / "utils.ts").write_text("export function helper() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    # git diff reports only auth.ts as changed (not deleted)
+    git_changed_result = MagicMock()
+    git_changed_result.returncode = 0
+    git_changed_result.stdout = "src/auth.ts\n"
+
+    git_deleted_result = MagicMock()
+    git_deleted_result.returncode = 0
+    git_deleted_result.stdout = ""  # no deleted files
+
+    ingester_result = MagicMock()
+    ingester_result.returncode = 0
+    ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+    ingester_result.stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git" and "--diff-filter=D" in cmd:
+            return git_deleted_result
+        if cmd[0] == "git":
+            return git_changed_result
+        return ingester_result
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
+
+        assert result.exit_code == 0
+        # git diff was called (at least once — may call for deleted + changed)
+        git_calls = [c for c in mock_subprocess.run.call_args_list if c[0][0][0] == "git"]
+        assert len(git_calls) >= 1
+        # ingester called only once (only auth.ts, not utils.ts)
+        ingester_calls = [c for c in mock_subprocess.run.call_args_list if c[0][0][0] == "node"]
+        assert len(ingester_calls) == 1
+        assert "auth.ts" in str(ingester_calls[0])
+
+
+def test_scan_changed_reports_no_changes_when_git_diff_empty(tmp_path):
+    """dgk scan --changed reports 'no changed files' when git diff returns nothing."""
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text('[project]\nname = "test"\n')
+
+    git_result = MagicMock()
+    git_result.returncode = 0
+    git_result.stdout = ""
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls:
+
+        mock_subprocess.run.return_value = git_result
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
+
+        assert result.exit_code == 0
+        assert "no" in result.output.lower() or "0" in result.output
+
+
+def test_scan_changed_removes_nodes_for_deleted_files(tmp_path):
+    """dgk scan --changed deletes nodes for files removed in git diff (D status)."""
+    src = tmp_path / "src"
+    src.mkdir()
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    # git diff reports auth.ts as Deleted
+    git_result = MagicMock()
+    git_result.returncode = 0
+    git_result.stdout = "src/deleted.ts\n"
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find, \
+         patch("dgk_cli.commands.scan._get_deleted_files") as mock_deleted:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_deleted.return_value = ["src/deleted.ts"]
+        mock_subprocess.run.return_value = git_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
+
+        assert result.exit_code == 0
+        # delete_file_nodes was called for the deleted file
+        mock_client.delete_file_nodes.assert_called_with("src/deleted.ts")
+
