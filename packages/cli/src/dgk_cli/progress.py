@@ -40,10 +40,12 @@ class ScanProgress:
             self._task_id = self._progress.add_task("scanning", total=self._total)
 
     def advance(self, file: str, nodes: int, rels: int) -> None:
-        """Increment the progress bar by one file."""
+        """Increment the progress bar by one file; print detail line in verbose mode."""
         self._file_count += 1
         if self._progress is not None and self._task_id is not None:
             self._progress.advance(self._task_id)
+        if self._verbose:
+            self._console.print(f"  {file}: {nodes} nodes, {rels} rels")
 
     def add_warning(self, msg: str) -> None:
         """Collect a warning to be shown after the summary line."""
@@ -57,5 +59,7 @@ class ScanProgress:
             f"Done in {elapsed:.1f}s: {total_nodes} nodes, {total_rels} rels "
             f"from {self._file_count} files"
         )
-        for warning in self._warnings:
-            self._console.print(f"  Warning: {warning}")
+        if self._warnings:
+            self._console.print(f"{len(self._warnings)} warning(s):")
+            for warning in self._warnings:
+                self._console.print(f"  {warning}")

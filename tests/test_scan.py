@@ -457,3 +457,129 @@ def test_scan_directory_summary_contains_elapsed_time(tmp_path):
         assert "rels" in result.output
         assert "files" in result.output
 
+
+# ── Phase 2: --verbose flag and warning collection ────────────────────────────
+
+def test_scan_directory_verbose_shows_per_file_detail(tmp_path):
+    """dgk scan <dir> --verbose prints a per-file detail line for each file."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "auth.ts").write_text("export function login() {}")
+    (src / "utils.ts").write_text("export function helper() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--verbose"])
+
+        assert result.exit_code == 0
+        # Per-file lines: file name and counts should appear
+        assert "nodes" in result.output
+        assert "rels" in result.output
+        # Should have appeared at least twice (two files)
+        assert result.output.count("nodes") >= 2
+
+
+def test_scan_directory_verbose_short_flag(tmp_path):
+    """`-v` short flag works the same as --verbose."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "-v"])
+
+        assert result.exit_code == 0
+        assert "nodes" in result.output
+
+
+def test_scan_directory_no_inline_warnings(tmp_path):
+    """dgk scan <dir> does not print warnings inline; they appear in summary section."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "good.ts").write_text("export function ok() {}")
+    (src / "bad.ts").write_text("broken")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    good_result = MagicMock()
+    good_result.returncode = 0
+    good_result.stdout = SAMPLE_INGESTER_OUTPUT
+    good_result.stderr = ""
+
+    bad_result = MagicMock()
+    bad_result.returncode = 1
+    bad_result.stdout = ""
+    bad_result.stderr = "Parse error"
+
+    def fake_run(cmd, **kwargs):
+        if "bad.ts" in str(cmd):
+            return bad_result
+        return good_result
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Warning must NOT appear before the summary line ("Done in...")
+        output = result.output
+        done_pos = output.lower().find("done in")
+        assert done_pos >= 0, "Summary line should be present"
+        # Inline inline "Warning:" should NOT appear before the summary
+        pre_summary = output[:done_pos]
+        assert "warning" not in pre_summary.lower(), (
+            f"Inline warning appeared before summary. Pre-summary output:\n{pre_summary}"
+        )
+

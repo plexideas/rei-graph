@@ -92,17 +92,20 @@ def _collect_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
-def _scan_single_file(file_path: Path, ingester: Path) -> ScanResult | None:
-    """Scan a single file with the TS ingester."""
+def _scan_single_file(file_path: Path, ingester: Path) -> tuple[ScanResult | None, str]:
+    """Scan a single file with the TS ingester.
+
+    Returns a (result, warning) tuple. `warning` is a non-empty string when
+    the ingester fails; callers are responsible for surfacing it.
+    """
     result = subprocess.run(
         ["node", str(ingester), str(file_path.resolve())],
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
-        click.echo(f"  Warning: failed to scan {file_path} — {result.stderr.strip()}")
-        return None
-    return _parse_ingester_output(result.stdout)
+        return None, f"failed to parse {file_path.name} — {result.stderr.strip()}"
+    return _parse_ingester_output(result.stdout), ""
 
 
 def _get_changed_files(root: Path) -> list[str]:
@@ -135,7 +138,8 @@ def _get_deleted_files(root: Path) -> list[str]:
 @click.command()
 @click.argument("file_path")
 @click.option("--changed", is_flag=True, default=False, help="Only scan git-changed files")
-def scan(file_path: str, changed: bool):
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Print per-file node/rel counts")
+def scan(file_path: str, changed: bool, verbose: bool):
     """Scan a TypeScript/TSX file or directory and add to the code graph."""
     path = Path(file_path)
     if not path.exists():
@@ -158,7 +162,7 @@ def scan(file_path: str, changed: bool):
             click.echo("No TS/TSX files found to scan.")
             return
 
-        progress = ScanProgress(total=len(files))
+        progress = ScanProgress(total=len(files), verbose=verbose)
         progress.start()
         total_nodes = 0
         total_rels = 0
@@ -167,14 +171,20 @@ def scan(file_path: str, changed: bool):
         client = Neo4jClient()
         try:
             for f in files:
-                scan_result = _scan_single_file(f, ingester)
+                scan_result, warning = _scan_single_file(f, ingester)
+                if warning:
+                    progress.add_warning(warning)
                 if scan_result:
                     client.delete_file_nodes(scan_result.file)
                     client.upsert_nodes(scan_result.nodes)
                     client.upsert_relationships(scan_result.relationships)
                     total_nodes += len(scan_result.nodes)
                     total_rels += len(scan_result.relationships)
-                progress.advance(str(f), len(scan_result.nodes) if scan_result else 0, len(scan_result.relationships) if scan_result else 0)
+                progress.advance(
+                    str(f),
+                    len(scan_result.nodes) if scan_result else 0,
+                    len(scan_result.relationships) if scan_result else 0,
+                )
         finally:
             client.close()
 
@@ -245,7 +255,9 @@ def _scan_changed(root: Path) -> None:
             file_path = root / rel_path
             if not file_path.exists():
                 continue
-            scan_result = _scan_single_file(file_path, ingester)
+            scan_result, warning = _scan_single_file(file_path, ingester)
+            if warning:
+                click.echo(f"  Warning: {warning}")
             if scan_result:
                 client.delete_file_nodes(scan_result.file)
                 client.upsert_nodes(scan_result.nodes)
