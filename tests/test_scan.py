@@ -583,3 +583,201 @@ def test_scan_directory_no_inline_warnings(tmp_path):
             f"Inline warning appeared before summary. Pre-summary output:\n{pre_summary}"
         )
 
+
+# ── Phase 3: single-file spinner, --changed path, edge cases ─────────────────
+
+def test_scan_single_file_output_contains_summary(tmp_path):
+    """dgk scan <single-file> output is non-empty and contains the enriched summary."""
+    ts_file = tmp_path / "app.ts"
+    ts_file.write_text("export function app() {}")
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(ts_file)])
+
+        assert result.exit_code == 0
+        assert "Done in" in result.output
+        assert "nodes" in result.output
+        assert "rels" in result.output
+
+
+def test_scan_changed_summary_contains_elapsed_time(tmp_path):
+    """dgk scan --changed summary line includes elapsed time ('Done in Xs')."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "auth.ts").write_text("export function login() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    git_changed_result = MagicMock()
+    git_changed_result.returncode = 0
+    git_changed_result.stdout = "src/auth.ts\n"
+
+    git_deleted_result = MagicMock()
+    git_deleted_result.returncode = 0
+    git_deleted_result.stdout = ""
+
+    ingester_result = MagicMock()
+    ingester_result.returncode = 0
+    ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+    ingester_result.stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git" and "--diff-filter=D" in cmd:
+            return git_deleted_result
+        if cmd[0] == "git":
+            return git_changed_result
+        return ingester_result
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
+
+        assert result.exit_code == 0
+        assert "Done in" in result.output
+        assert "nodes" in result.output
+        assert "rels" in result.output
+        assert "files" in result.output
+
+
+def test_scan_changed_verbose_shows_per_file_detail(tmp_path):
+    """dgk scan --changed --verbose prints a per-file detail line."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "auth.ts").write_text("export function login() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    git_changed_result = MagicMock()
+    git_changed_result.returncode = 0
+    git_changed_result.stdout = "src/auth.ts\n"
+
+    git_deleted_result = MagicMock()
+    git_deleted_result.returncode = 0
+    git_deleted_result.stdout = ""
+
+    ingester_result = MagicMock()
+    ingester_result.returncode = 0
+    ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+    ingester_result.stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git" and "--diff-filter=D" in cmd:
+            return git_deleted_result
+        if cmd[0] == "git":
+            return git_changed_result
+        return ingester_result
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--changed", "--verbose"])
+
+        assert result.exit_code == 0
+        # Per-file detail line: file path + counts
+        assert "auth.ts" in result.output
+        assert "nodes" in result.output
+        assert "rels" in result.output
+
+
+def test_scan_empty_directory_prints_no_files_message(tmp_path):
+    """dgk scan <empty-dir> prints 'No TS/TSX files found to scan.' and exits cleanly."""
+    # Empty src dir — no TS files
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "readme.md").write_text("# docs")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "No TS/TSX files found to scan." in result.output
+
+
+def test_scan_directory_non_tty_no_ansi(tmp_path):
+    """dgk scan <dir> with CliRunner (non-TTY / color=False) produces no ANSI sequences."""
+    import re
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)], color=False)
+
+        assert result.exit_code == 0
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+        assert not ansi_escape.search(result.output), (
+            f"ANSI sequences in output: {repr(result.output)}"
+        )
+

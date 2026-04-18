@@ -147,7 +147,7 @@ def scan(file_path: str, changed: bool, verbose: bool):
         return
 
     if changed:
-        _scan_changed(path)
+        _scan_changed(path, verbose=verbose)
         return
 
     try:
@@ -191,19 +191,17 @@ def scan(file_path: str, changed: bool, verbose: bool):
         elapsed = time.monotonic() - start_time
         progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
     else:
-        click.echo(f"Scanning {file_path}...")
+        start_time = time.monotonic()
+        progress = ScanProgress(total=1, verbose=verbose)
+        progress.start()
 
-        result = subprocess.run(
-            ["node", str(ingester), str(path.resolve())],
-            capture_output=True,
-            text=True,
-        )
+        scan_result, warning = _scan_single_file(path, ingester)
+        elapsed = time.monotonic() - start_time
 
-        if result.returncode != 0:
-            click.echo(f"Error: ingester failed — {result.stderr.strip()}")
+        if warning:
+            progress.stop()
+            click.echo(f"Error: {warning}")
             return
-
-        scan_result = _parse_ingester_output(result.stdout)
 
         client = Neo4jClient()
         try:
@@ -212,13 +210,19 @@ def scan(file_path: str, changed: bool, verbose: bool):
         finally:
             client.close()
 
-        click.echo(
-            f"Done: {len(scan_result.nodes)} nodes, "
-            f"{len(scan_result.relationships)} relationships"
+        progress.advance(
+            str(path),
+            len(scan_result.nodes),
+            len(scan_result.relationships),
+        )
+        progress.finish(
+            elapsed=elapsed,
+            total_nodes=len(scan_result.nodes),
+            total_rels=len(scan_result.relationships),
         )
 
 
-def _scan_changed(root: Path) -> None:
+def _scan_changed(root: Path, verbose: bool = False) -> None:
     """Scan only git-changed files and remove nodes for deleted files."""
     # Remove nodes for deleted files first
     deleted = _get_deleted_files(root)
@@ -247,9 +251,11 @@ def _scan_changed(root: Path) -> None:
             click.echo(f"Error: {e}")
             return
 
-        click.echo(f"Scanning {len(to_scan)} changed file(s)...")
         total_nodes = 0
         total_rels = 0
+        start_time = time.monotonic()
+        progress = ScanProgress(total=len(to_scan), verbose=verbose)
+        progress.start()
 
         for rel_path in to_scan:
             file_path = root / rel_path
@@ -257,15 +263,21 @@ def _scan_changed(root: Path) -> None:
                 continue
             scan_result, warning = _scan_single_file(file_path, ingester)
             if warning:
-                click.echo(f"  Warning: {warning}")
+                progress.add_warning(warning)
             if scan_result:
                 client.delete_file_nodes(scan_result.file)
                 client.upsert_nodes(scan_result.nodes)
                 client.upsert_relationships(scan_result.relationships)
                 total_nodes += len(scan_result.nodes)
                 total_rels += len(scan_result.relationships)
+            progress.advance(
+                str(file_path),
+                len(scan_result.nodes) if scan_result else 0,
+                len(scan_result.relationships) if scan_result else 0,
+            )
     finally:
         client.close()
 
-    click.echo(f"Done: {total_nodes} nodes, {total_rels} relationships from {len(to_scan)} changed files")
+    elapsed = time.monotonic() - start_time
+    progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
 

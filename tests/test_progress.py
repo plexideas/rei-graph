@@ -80,3 +80,37 @@ def test_finish_no_warnings_omits_warning_section():
     output = buf.getvalue()
     assert "warning" not in output.lower()
     assert "Warning" not in output
+
+
+# ── single-file spinner mode ──────────────────────────────────────────────────
+
+def test_single_file_finish_contains_summary():
+    """ScanProgress(total=1): finish() summary contains elapsed, nodes, rels, files."""
+    console, buf = _make_console()
+    sp = ScanProgress(total=1, verbose=False, console=console)
+    sp.start()
+    sp.advance("src/app.ts", 8, 4)
+    sp.finish(elapsed=0.3, total_nodes=8, total_rels=4)
+    output = buf.getvalue()
+    assert "0.3s" in output
+    assert "8 nodes" in output
+    assert "4 rels" in output
+    assert "1 file" in output
+
+
+# ── non-TTY output ────────────────────────────────────────────────────────────
+
+def test_non_tty_output_has_no_ansi_escape_sequences():
+    """With force_terminal=False, finish() output contains no ANSI escape sequences."""
+    import re
+    console, buf = _make_console()  # already uses force_terminal=False
+    sp = ScanProgress(total=3, verbose=False, console=console)
+    sp.start()
+    sp.advance("a.ts", 5, 2)
+    sp.advance("b.ts", 3, 1)
+    sp.advance("c.ts", 2, 0)
+    sp.finish(elapsed=1.0, total_nodes=10, total_rels=3)
+    output = buf.getvalue()
+    # No ANSI escape sequences (ESC [ ... m)
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+    assert not ansi_escape.search(output), f"ANSI sequences found: {repr(output)}"
