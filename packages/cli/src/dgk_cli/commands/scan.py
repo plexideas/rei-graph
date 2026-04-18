@@ -5,7 +5,8 @@ from pathlib import Path
 
 import click
 
-from dgk_core.config import read_config
+from dgk_core.config import generate_default_config, read_config, write_config
+from dgk_core.hashing import project_hash
 from dgk_core.schemas import GraphNode, GraphRelationship, ScanResult
 from dgk_storage.neo4j_client import Neo4jClient
 from dgk_cli.progress import ScanProgress
@@ -31,6 +32,20 @@ def _find_ingester() -> Path:
             return candidate
 
     raise FileNotFoundError("TS ingester not found. Run 'npm run build' in packages/ingester_ts/")
+
+
+def _resolve_project(root: Path) -> str:
+    """Resolve project identity for *root*, auto-creating .dgk/project.toml if needed.
+
+    Returns the canonical absolute path (project_id).
+    """
+    project_id = str(root.resolve())
+    config_path = root / ".dgk" / "project.toml"
+    if not config_path.exists():
+        project_name = root.resolve().name
+        config = generate_default_config(project_name, project_id=project_id)
+        write_config(config_path, config)
+    return project_id
 
 
 def _parse_ingester_output(raw: str) -> ScanResult:
@@ -92,14 +107,17 @@ def _collect_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
-def _scan_single_file(file_path: Path, ingester: Path) -> tuple[ScanResult | None, str]:
+def _scan_single_file(file_path: Path, ingester: Path, project_prefix: str | None = None) -> tuple[ScanResult | None, str]:
     """Scan a single file with the TS ingester.
 
     Returns a (result, warning) tuple. `warning` is a non-empty string when
     the ingester fails; callers are responsible for surfacing it.
     """
+    cmd = ["node", str(ingester), str(file_path.resolve())]
+    if project_prefix:
+        cmd.extend(["--project-prefix", project_prefix])
     result = subprocess.run(
-        ["node", str(ingester), str(file_path.resolve())],
+        cmd,
         capture_output=True,
         text=True,
     )
@@ -146,8 +164,13 @@ def scan(file_path: str, changed: bool, verbose: bool):
         click.echo(f"Error: file not found — {file_path}")
         return
 
+    # Resolve project identity (auto-init .dgk/project.toml if missing)
+    project_root = path if path.is_dir() else path.parent
+    project_id = _resolve_project(project_root)
+    prefix = project_hash(project_id)
+
     if changed:
-        _scan_changed(path, verbose=verbose)
+        _scan_changed(path, verbose=verbose, project_id=project_id, project_prefix=prefix)
         return
 
     try:
@@ -168,10 +191,10 @@ def scan(file_path: str, changed: bool, verbose: bool):
         total_rels = 0
         start_time = time.monotonic()
 
-        client = Neo4jClient()
+        client = Neo4jClient(project_id=project_id)
         try:
             for f in files:
-                scan_result, warning = _scan_single_file(f, ingester)
+                scan_result, warning = _scan_single_file(f, ingester, project_prefix=prefix)
                 if warning:
                     progress.add_warning(warning)
                 if scan_result:
@@ -195,7 +218,7 @@ def scan(file_path: str, changed: bool, verbose: bool):
         progress = ScanProgress(total=1, verbose=verbose)
         progress.start()
 
-        scan_result, warning = _scan_single_file(path, ingester)
+        scan_result, warning = _scan_single_file(path, ingester, project_prefix=prefix)
         elapsed = time.monotonic() - start_time
 
         if warning:
@@ -203,7 +226,7 @@ def scan(file_path: str, changed: bool, verbose: bool):
             click.echo(f"Error: {warning}")
             return
 
-        client = Neo4jClient()
+        client = Neo4jClient(project_id=project_id)
         try:
             client.upsert_nodes(scan_result.nodes)
             client.upsert_relationships(scan_result.relationships)
@@ -222,7 +245,7 @@ def scan(file_path: str, changed: bool, verbose: bool):
         )
 
 
-def _scan_changed(root: Path, verbose: bool = False) -> None:
+def _scan_changed(root: Path, verbose: bool = False, project_id: str | None = None, project_prefix: str | None = None) -> None:
     """Scan only git-changed files and remove nodes for deleted files."""
     # Remove nodes for deleted files first
     deleted = _get_deleted_files(root)
@@ -236,7 +259,7 @@ def _scan_changed(root: Path, verbose: bool = False) -> None:
         click.echo("No changed files found.")
         return
 
-    client = Neo4jClient()
+    client = Neo4jClient(project_id=project_id)
     try:
         for rel_path in deleted:
             client.delete_file_nodes(rel_path)
@@ -261,7 +284,7 @@ def _scan_changed(root: Path, verbose: bool = False) -> None:
             file_path = root / rel_path
             if not file_path.exists():
                 continue
-            scan_result, warning = _scan_single_file(file_path, ingester)
+            scan_result, warning = _scan_single_file(file_path, ingester, project_prefix=project_prefix)
             if warning:
                 progress.add_warning(warning)
             if scan_result:

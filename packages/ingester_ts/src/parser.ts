@@ -24,11 +24,12 @@ export interface ScanResult {
   relationships: GraphRelationship[];
 }
 
-function makeId(label: string, filePath: string, name?: string): string {
+function makeId(label: string, filePath: string, name?: string, projectPrefix?: string): string {
+  const prefix = projectPrefix ? `${projectPrefix}:` : "";
   if (name) {
-    return `${label.toLowerCase()}:${filePath}:${name}`;
+    return `${label.toLowerCase()}:${prefix}${filePath}:${name}`;
   }
-  return `${label.toLowerCase()}:${filePath}`;
+  return `${label.toLowerCase()}:${prefix}${filePath}`;
 }
 
 function isReactComponent(name: string): boolean {
@@ -68,7 +69,7 @@ function resolveRelativeImport(sourceFilePath: string, specifier: string): strin
   return path.relative(process.cwd(), resolved).replace(/\\/g, "/");
 }
 
-export function parseFile(filePath: string): ScanResult {
+export function parseFile(filePath: string, projectPrefix?: string): ScanResult {
   const project = new Project({ compilerOptions: { allowJs: true, jsx: 1 } });
   const sourceFile = project.addSourceFileAtPath(filePath);
   const normalizedPath = path.relative(process.cwd(), filePath).replace(/\\/g, "/");
@@ -77,7 +78,7 @@ export function parseFile(filePath: string): ScanResult {
   const relationships: GraphRelationship[] = [];
 
   // Module node for the file itself
-  const moduleId = makeId("module", normalizedPath);
+  const moduleId = makeId("module", normalizedPath, undefined, projectPrefix);
   nodes.push({
     id: moduleId,
     label: "Module",
@@ -98,7 +99,7 @@ export function parseFile(filePath: string): ScanResult {
     if (isReactComponent(name)) label = "Component";
     else if (isReactHook(name)) label = "Hook";
 
-    const nodeId = makeId(label.toLowerCase(), normalizedPath, name);
+    const nodeId = makeId(label.toLowerCase(), normalizedPath, name, projectPrefix);
     nodes.push({
       id: nodeId,
       label,
@@ -124,7 +125,7 @@ export function parseFile(filePath: string): ScanResult {
     if (!name) continue;
 
     const exported = cls.isExported();
-    const nodeId = makeId("class", normalizedPath, name);
+    const nodeId = makeId("class", normalizedPath, name, projectPrefix);
     nodes.push({
       id: nodeId,
       label: "Class",
@@ -148,7 +149,7 @@ export function parseFile(filePath: string): ScanResult {
   for (const iface of sourceFile.getInterfaces()) {
     const name = iface.getName();
     const exported = iface.isExported();
-    const nodeId = makeId("interface", normalizedPath, name);
+    const nodeId = makeId("interface", normalizedPath, name, projectPrefix);
     nodes.push({
       id: nodeId,
       label: "Interface",
@@ -172,7 +173,7 @@ export function parseFile(filePath: string): ScanResult {
   for (const typeAlias of sourceFile.getTypeAliases()) {
     const name = typeAlias.getName();
     const exported = typeAlias.isExported();
-    const nodeId = makeId("type", normalizedPath, name);
+    const nodeId = makeId("type", normalizedPath, name, projectPrefix);
     nodes.push({
       id: nodeId,
       label: "Type",
@@ -208,7 +209,7 @@ export function parseFile(filePath: string): ScanResult {
         if (isReactComponent(name)) label = "Component";
         else if (isReactHook(name)) label = "Hook";
 
-        const nodeId = makeId(label.toLowerCase(), normalizedPath, name);
+        const nodeId = makeId(label.toLowerCase(), normalizedPath, name, projectPrefix);
         nodes.push({
           id: nodeId,
           label,
@@ -234,7 +235,7 @@ export function parseFile(filePath: string): ScanResult {
   for (const imp of sourceFile.getImportDeclarations()) {
     const moduleSpecifier = imp.getModuleSpecifierValue();
     const resolvedTarget = resolveRelativeImport(filePath, moduleSpecifier);
-    const targetModuleId = makeId("module", resolvedTarget);
+    const targetModuleId = makeId("module", resolvedTarget, undefined, projectPrefix);
 
     const namedImports = imp.getNamedImports().map((n) => n.getName());
     const defaultImport = imp.getDefaultImport()?.getText();
@@ -258,7 +259,7 @@ export function parseFile(filePath: string): ScanResult {
         ? moduleSpecifier.split("/").slice(0, 2).join("/")
         : moduleSpecifier.split("/")[0];
 
-      const packageId = makeId("package", packageName);
+      const packageId = makeId("package", packageName, undefined, projectPrefix);
 
       // Only add the package node if we haven't seen it yet
       if (!nodes.some((n) => n.id === packageId)) {

@@ -781,3 +781,217 @@ def test_scan_directory_non_tty_no_ansi(tmp_path):
             f"ANSI sequences in output: {repr(result.output)}"
         )
 
+
+# ── Project-isolation Phase 2: TS ingester prefix + scan integration ──────────
+
+def test_scan_passes_project_prefix_to_ingester(tmp_path):
+    """dgk scan <dir> passes --project-prefix <hash> to the TS ingester subprocess."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    from dgk_core.hashing import project_hash
+
+    expected_prefix = project_hash(str(tmp_path.resolve()))
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Verify --project-prefix was passed to the ingester subprocess
+        ingester_call = mock_subprocess.run.call_args
+        cmd = ingester_call[0][0]
+        assert "--project-prefix" in cmd
+        prefix_idx = cmd.index("--project-prefix")
+        assert cmd[prefix_idx + 1] == expected_prefix
+
+
+def test_scan_constructs_neo4j_client_with_project_id(tmp_path):
+    """dgk scan <dir> constructs Neo4jClient with the resolved project_id."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    expected_project_id = str(tmp_path.resolve())
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Verify Neo4jClient was constructed with project_id
+        mock_client_cls.assert_called_once_with(project_id=expected_project_id)
+
+
+def test_scan_auto_inits_project_toml_when_missing(tmp_path):
+    """dgk scan <dir> auto-creates .dgk/project.toml when it doesn't exist."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    # Deliberately do NOT create .dgk/project.toml
+    assert not (tmp_path / ".dgk" / "project.toml").exists()
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # .dgk/project.toml should have been auto-created
+        config_path = tmp_path / ".dgk" / "project.toml"
+        assert config_path.exists()
+
+        # It should contain the project id (absolute path)
+        import tomllib
+        with open(config_path, "rb") as f:
+            config = tomllib.load(f)
+        assert config["project"]["id"] == str(tmp_path.resolve())
+
+
+def test_scan_single_file_passes_project_prefix(tmp_path):
+    """dgk scan <file> also passes --project-prefix to the ingester."""
+    ts_file = tmp_path / "app.ts"
+    ts_file.write_text("export function app() {}")
+
+    from dgk_core.hashing import project_hash
+
+    expected_prefix = project_hash(str(tmp_path.resolve()))
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(ts_file)])
+
+        assert result.exit_code == 0
+        ingester_call = mock_subprocess.run.call_args
+        cmd = ingester_call[0][0]
+        assert "--project-prefix" in cmd
+        prefix_idx = cmd.index("--project-prefix")
+        assert cmd[prefix_idx + 1] == expected_prefix
+
+
+def test_scan_changed_passes_project_prefix_and_project_id(tmp_path):
+    """dgk scan --changed passes project prefix to ingester and project_id to Neo4jClient."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "auth.ts").write_text("export function login() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    from dgk_core.hashing import project_hash
+
+    expected_prefix = project_hash(str(tmp_path.resolve()))
+    expected_project_id = str(tmp_path.resolve())
+
+    git_changed_result = MagicMock()
+    git_changed_result.returncode = 0
+    git_changed_result.stdout = "src/auth.ts\n"
+
+    git_deleted_result = MagicMock()
+    git_deleted_result.returncode = 0
+    git_deleted_result.stdout = ""
+
+    ingester_result = MagicMock()
+    ingester_result.returncode = 0
+    ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+    ingester_result.stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git" and "--diff-filter=D" in cmd:
+            return git_deleted_result
+        if cmd[0] == "git":
+            return git_changed_result
+        return ingester_result
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
+
+        assert result.exit_code == 0
+
+        # Verify --project-prefix was passed to ingester
+        ingester_calls = [c for c in mock_subprocess.run.call_args_list if c[0][0][0] == "node"]
+        assert len(ingester_calls) == 1
+        cmd = ingester_calls[0][0][0]
+        assert "--project-prefix" in ingester_calls[0][0][0]
+
+        # Verify Neo4jClient was constructed with project_id
+        mock_client_cls.assert_called_once_with(project_id=expected_project_id)
+

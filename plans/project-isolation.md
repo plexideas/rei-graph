@@ -50,14 +50,14 @@ Add a `--project-prefix <hash>` CLI argument to the TS ingester. When provided, 
 
 ### Acceptance criteria
 
-- [ ] TS ingester accepts `--project-prefix <hash>` argument
-- [ ] When `--project-prefix` is provided, all node IDs in output JSON include the hash prefix
-- [ ] When `--project-prefix` is omitted, output is identical to current behavior
-- [ ] `dgk scan <path>` resolves absolute path, computes hash, passes `--project-prefix` to ingester
-- [ ] `dgk scan <path>` on a directory without `.dgk/project.toml` auto-creates it before scanning
-- [ ] `Neo4jClient` in scan path is constructed with the resolved `project_id`
-- [ ] Tests: ingester output with `--project-prefix` contains prefixed IDs; scan integration test verifies prefix is passed
-- [ ] All existing tests pass
+- [x] TS ingester accepts `--project-prefix <hash>` argument
+- [x] When `--project-prefix` is provided, all node IDs in output JSON include the hash prefix
+- [x] When `--project-prefix` is omitted, output is identical to current behavior
+- [x] `dgk scan <path>` resolves absolute path, computes hash, passes `--project-prefix` to ingester
+- [x] `dgk scan <path>` on a directory without `.dgk/project.toml` auto-creates it before scanning
+- [x] `Neo4jClient` in scan path is constructed with the resolved `project_id`
+- [x] Tests: ingester output with `--project-prefix` contains prefixed IDs; scan integration test verifies prefix is passed
+- [x] All existing tests pass
 
 ---
 
