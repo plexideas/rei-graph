@@ -20,6 +20,12 @@ from dgk_mcp.server import (
     memory_record_plan,
     memory_get_recent_context,
     get_recent_decisions,
+    dag_create_plan,
+    dag_run_plan,
+    dag_get_plan,
+    dag_step_status,
+    dag_cancel_plan,
+    get_open_plans,
     TOOLS,
     RESOURCES,
 )
@@ -505,3 +511,131 @@ def test_resources_registry_contains_schema_and_summary():
     uris = {str(r.uri) for r in RESOURCES}
     assert "project://schema" in uris
     assert "project://summary" in uris
+
+
+# ─── dag tools ──────────────────────────────────────────────────────────────
+
+
+class TestDagCreatePlan:
+    def test_returns_plan_id(self):
+        mock_dag = MagicMock()
+        mock_dag.create_plan.return_value = "plan:abc123"
+        result = dag_create_plan({"goal": "refactor auth", "steps": ["scan", "apply"]}, mock_dag)
+        assert result == {"planId": "plan:abc123"}
+
+    def test_passes_goal_and_steps(self):
+        mock_dag = MagicMock()
+        mock_dag.create_plan.return_value = "plan:abc123"
+        dag_create_plan({"goal": "refactor auth", "steps": ["scan", "apply"]}, mock_dag)
+        mock_dag.create_plan.assert_called_once_with(
+            goal="refactor auth", steps=["scan", "apply"], targets=None
+        )
+
+    def test_passes_targets_when_provided(self):
+        mock_dag = MagicMock()
+        mock_dag.create_plan.return_value = "plan:abc123"
+        dag_create_plan(
+            {"goal": "refactor", "steps": ["scan"], "targets": ["module:abc"]}, mock_dag
+        )
+        mock_dag.create_plan.assert_called_once_with(
+            goal="refactor", steps=["scan"], targets=["module:abc"]
+        )
+
+
+class TestDagRunPlan:
+    def test_returns_run_result(self):
+        mock_dag = MagicMock()
+        mock_dag.run_plan.return_value = {"run_id": "plan:abc", "status": "running"}
+        result = dag_run_plan({"planId": "plan:abc"}, mock_dag)
+        assert result == {"run_id": "plan:abc", "status": "running"}
+
+    def test_calls_run_plan_with_id(self):
+        mock_dag = MagicMock()
+        mock_dag.run_plan.return_value = {"run_id": "plan:abc", "status": "running"}
+        dag_run_plan({"planId": "plan:abc"}, mock_dag)
+        mock_dag.run_plan.assert_called_once_with("plan:abc")
+
+
+class TestDagGetPlan:
+    def test_returns_plan_dict(self):
+        mock_dag = MagicMock()
+        mock_dag.get_plan.return_value = {"plan": {"id": "plan:abc"}, "steps": []}
+        result = dag_get_plan({"planId": "plan:abc"}, mock_dag)
+        assert result == {"plan": {"id": "plan:abc"}, "steps": []}
+
+    def test_returns_error_when_not_found(self):
+        mock_dag = MagicMock()
+        mock_dag.get_plan.return_value = None
+        result = dag_get_plan({"planId": "plan:missing"}, mock_dag)
+        assert "error" in result
+
+
+class TestDagStepStatus:
+    def test_returns_step_dict(self):
+        mock_dag = MagicMock()
+        mock_dag.step_status.return_value = {"status": "running", "output": None}
+        result = dag_step_status({"planId": "plan:abc", "stepName": "scan"}, mock_dag)
+        assert result == {"status": "running", "output": None}
+
+    def test_returns_error_when_not_found(self):
+        mock_dag = MagicMock()
+        mock_dag.step_status.return_value = None
+        result = dag_step_status({"planId": "plan:abc", "stepName": "missing"}, mock_dag)
+        assert "error" in result
+
+
+class TestDagCancelPlan:
+    def test_returns_cancelled_true(self):
+        mock_dag = MagicMock()
+        mock_dag.cancel_plan.return_value = True
+        result = dag_cancel_plan({"planId": "plan:abc"}, mock_dag)
+        assert result == {"cancelled": True}
+
+    def test_calls_cancel_plan(self):
+        mock_dag = MagicMock()
+        mock_dag.cancel_plan.return_value = True
+        dag_cancel_plan({"planId": "plan:abc"}, mock_dag)
+        mock_dag.cancel_plan.assert_called_once_with("plan:abc")
+
+
+class TestGetOpenPlans:
+    def test_returns_no_plans_message_when_empty(self):
+        mock_dag = MagicMock()
+        mock_dag.list_open_plans.return_value = []
+        result = get_open_plans(mock_dag)
+        assert "No open plans" in result
+
+    def test_returns_formatted_plan_list(self):
+        mock_dag = MagicMock()
+        mock_dag.list_open_plans.return_value = [
+            {"id": "plan:abc", "goal": "refactor auth", "status": "pending"}
+        ]
+        result = get_open_plans(mock_dag)
+        assert "refactor auth" in result
+        assert "plan:abc" in result
+
+
+class TestDagToolsAndResourcesRegistered:
+    def test_dag_create_plan_in_tools(self):
+        assert "dag.create_plan" in {t.name for t in TOOLS}
+
+    def test_dag_run_plan_in_tools(self):
+        assert "dag.run_plan" in {t.name for t in TOOLS}
+
+    def test_dag_get_plan_in_tools(self):
+        assert "dag.get_plan" in {t.name for t in TOOLS}
+
+    def test_dag_step_status_in_tools(self):
+        assert "dag.step_status" in {t.name for t in TOOLS}
+
+    def test_dag_cancel_plan_in_tools(self):
+        assert "dag.cancel_plan" in {t.name for t in TOOLS}
+
+    def test_open_plans_resource_registered(self):
+        uris = {str(r.uri) for r in RESOURCES}
+        assert "project://open-plans" in uris
+
+    def test_plan_resource_registered(self):
+        uris = {str(r.uri) for r in RESOURCES}
+        assert any(u.startswith("plan://") for u in uris)
+

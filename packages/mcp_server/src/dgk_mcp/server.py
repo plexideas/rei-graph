@@ -10,6 +10,7 @@ from pydantic import AnyUrl
 from dgk_core.schemas import GraphNode, GraphRelationship
 from dgk_storage.neo4j_client import Neo4jClient, check_neo4j_health
 from dgk_storage.memory_client import MemoryClient
+from dgk_storage.dag_client import DagClient
 
 server = Server("dev-graph-kit")
 
@@ -212,6 +213,56 @@ def get_recent_decisions(mem: MemoryClient) -> str:
     return "\n".join(lines)
 
 
+# ─── DAG helpers (testable) ───────────────────────────────────────────────────
+
+def dag_create_plan(arguments: dict, dag: DagClient) -> dict:
+    """dag.create_plan: create a new execution plan."""
+    plan_id = dag.create_plan(
+        goal=arguments["goal"],
+        steps=arguments["steps"],
+        targets=arguments.get("targets"),
+    )
+    return {"planId": plan_id}
+
+
+def dag_run_plan(arguments: dict, dag: DagClient) -> dict:
+    """dag.run_plan: start executing a plan."""
+    return dag.run_plan(arguments["planId"])
+
+
+def dag_get_plan(arguments: dict, dag: DagClient) -> dict:
+    """dag.get_plan: get plan details and step statuses."""
+    result = dag.get_plan(arguments["planId"])
+    if result is None:
+        return {"error": f"Plan '{arguments['planId']}' not found"}
+    return result
+
+
+def dag_step_status(arguments: dict, dag: DagClient) -> dict:
+    """dag.step_status: get status of a single step."""
+    result = dag.step_status(arguments["planId"], arguments["stepName"])
+    if result is None:
+        return {"error": f"Step '{arguments['stepName']}' not found in plan '{arguments['planId']}'"}
+    return result
+
+
+def dag_cancel_plan(arguments: dict, dag: DagClient) -> dict:
+    """dag.cancel_plan: cancel a running or pending plan."""
+    cancelled = dag.cancel_plan(arguments["planId"])
+    return {"cancelled": cancelled}
+
+
+def get_open_plans(dag: DagClient) -> str:
+    """project://open-plans: list open (pending/running) plans."""
+    plans = dag.list_open_plans()
+    if not plans:
+        return "No open plans."
+    lines = []
+    for p in plans:
+        lines.append(f"- [{p.get('status', '?')}] {p.get('id', '?')}: {p.get('goal', '')}")
+    return "\n".join(lines)
+
+
 # ─── TOOL / RESOURCE definitions ──────────────────────────────────────────────
 
 TOOLS: list[Tool] = [
@@ -382,6 +433,58 @@ TOOLS: list[Tool] = [
             "required": ["query"],
         },
     ),
+    Tool(
+        name="dag.create_plan",
+        description="Create a new execution plan with ordered steps",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string"},
+                "steps": {"type": "array", "items": {"type": "string"}},
+                "targets": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["goal", "steps"],
+        },
+    ),
+    Tool(
+        name="dag.run_plan",
+        description="Start executing a plan",
+        inputSchema={
+            "type": "object",
+            "properties": {"planId": {"type": "string"}},
+            "required": ["planId"],
+        },
+    ),
+    Tool(
+        name="dag.get_plan",
+        description="Get plan details and step statuses",
+        inputSchema={
+            "type": "object",
+            "properties": {"planId": {"type": "string"}},
+            "required": ["planId"],
+        },
+    ),
+    Tool(
+        name="dag.step_status",
+        description="Get status of a single step within a plan",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "planId": {"type": "string"},
+                "stepName": {"type": "string"},
+            },
+            "required": ["planId", "stepName"],
+        },
+    ),
+    Tool(
+        name="dag.cancel_plan",
+        description="Cancel a running or pending plan",
+        inputSchema={
+            "type": "object",
+            "properties": {"planId": {"type": "string"}},
+            "required": ["planId"],
+        },
+    ),
 ]
 
 RESOURCES: list[Resource] = [
@@ -403,6 +506,18 @@ RESOURCES: list[Resource] = [
         description="Last N agent decisions",
         mimeType="text/plain",
     ),
+    Resource(
+        name="Open Plans",
+        uri=AnyUrl("project://open-plans"),
+        description="List of pending/running execution plans",
+        mimeType="text/plain",
+    ),
+    Resource(
+        name="Plan",
+        uri=AnyUrl("plan://placeholder"),
+        description="Execution plan details by ID (use plan://<id>)",
+        mimeType="text/plain",
+    ),
 ]
 
 _TOOL_NAMES = {t.name for t in TOOLS}
@@ -422,6 +537,14 @@ _MEMORY_TOOL_NAMES = {
     "memory.record_validation",
     "memory.record_plan",
     "memory.get_recent_context",
+}
+
+_DAG_TOOL_NAMES = {
+    "dag.create_plan",
+    "dag.run_plan",
+    "dag.get_plan",
+    "dag.step_status",
+    "dag.cancel_plan",
 }
 
 
@@ -452,6 +575,27 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return [TextContent(type="text", text=json.dumps(result))]
         finally:
             mem.close()
+
+    # DAG tools use DagClient
+    if name in _DAG_TOOL_NAMES:
+        dag = DagClient()
+        try:
+            match name:
+                case "dag.create_plan":
+                    result = dag_create_plan(arguments, dag)
+                case "dag.run_plan":
+                    result = dag_run_plan(arguments, dag)
+                case "dag.get_plan":
+                    result = dag_get_plan(arguments, dag)
+                case "dag.step_status":
+                    result = dag_step_status(arguments, dag)
+                case "dag.cancel_plan":
+                    result = dag_cancel_plan(arguments, dag)
+                case _:
+                    result = {"error": f"Unknown dag tool: {name}"}
+            return [TextContent(type="text", text=json.dumps(result))]
+        finally:
+            dag.close()
 
     client = Neo4jClient()
     try:
@@ -507,4 +651,20 @@ async def read_resource(uri: AnyUrl) -> str:
             return get_recent_decisions(mem)
         finally:
             mem.close()
+    if uri_str == "project://open-plans":
+        dag = DagClient()
+        try:
+            return get_open_plans(dag)
+        finally:
+            dag.close()
+    if uri_str.startswith("plan://"):
+        plan_id = uri_str[len("plan://"):]
+        dag = DagClient()
+        try:
+            result = dag.get_plan(plan_id)
+            if result is None:
+                return f"Plan '{plan_id}' not found."
+            return json.dumps(result, indent=2)
+        finally:
+            dag.close()
     raise ValueError(f"Unknown resource URI: {uri}")

@@ -65,7 +65,7 @@ The TypeScript ingester (`ingester_ts`) parses a single `.ts`/`.tsx` file using 
 
 **Goals**: P0 accurate dependency/impact info, P2 TS/React out-of-box
 
-### What to build
+### What to **build**
 
 Extend `dgk scan .` to walk the project tree (respecting include/exclude from `.dgk/project.toml`), scan all TS/TSX files, and resolve cross-file imports into `IMPORTS` and `DEPENDS_ON` relationships. Add `dgk impact <file>` which traverses the graph to find directly and transitively affected nodes when a file changes. The code graph is now complete enough to answer dependency questions across an entire React/TS project.
 
