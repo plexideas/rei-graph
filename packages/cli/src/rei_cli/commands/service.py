@@ -3,7 +3,7 @@ from pathlib import Path
 
 import click
 
-_PACKAGE_COMPOSE_PATH: Path = Path(__file__).resolve().parent / "_compose" / "docker-compose.yml"
+_PACKAGE_COMPOSE_PATH: Path = Path(__file__).resolve().parent.parent / "_compose" / "docker-compose.yml"
 
 
 def _resolve_compose_path() -> Path:

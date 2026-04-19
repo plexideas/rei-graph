@@ -23,7 +23,7 @@ TS_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx"}
 _PACKAGE_INGESTER_PATH: Path = Path(__file__).resolve().parent / "_ingester" / "cli.js"
 
 # Path to the compose file bundled with the rei package (used for Neo4j auto-start)
-_PACKAGE_COMPOSE_PATH: Path = Path(__file__).resolve().parent / "_compose" / "docker-compose.yml"
+_PACKAGE_COMPOSE_PATH: Path = Path(__file__).resolve().parent.parent / "_compose" / "docker-compose.yml"
 
 _DOCKER_INSTALL_URL = "https://docs.docker.com/get-docker/"
 _NODE_INSTALL_URL = "https://nodejs.org/"
