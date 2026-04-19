@@ -46,13 +46,16 @@ jobs:
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       # ── GitHub Release ────────────────────────────────────────────────────
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Create the release if it doesn't exist yet; ignore error if it does
           gh release create "$GITHUB_REF_NAME" \
             --title "rei-graph ${{ steps.version.outputs.version }}" \
             --generate-notes \
+            dist/*.whl dist/*.tar.gz 2>/dev/null \
+          || gh release upload "$GITHUB_REF_NAME" \
             --clobber \
             dist/*.whl dist/*.tar.gz
 
