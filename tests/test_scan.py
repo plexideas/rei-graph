@@ -27,7 +27,10 @@ def test_scan_invokes_ingester_and_writes_to_neo4j(tmp_path):
     ts_file.write_text("export function hello() {}")
 
     with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find_ingester:
+
+        mock_find_ingester.return_value = Path("/fake/cli.js")
 
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -62,8 +65,10 @@ def test_scan_reports_ingester_failure(tmp_path):
     ts_file.write_text("invalid content")
 
     with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find_ingester:
 
+        mock_find_ingester.return_value = Path("/fake/cli.js")
         mock_client_cls.return_value.get_project.return_value = None
         mock_result = MagicMock()
         mock_result.returncode = 1
