@@ -1659,3 +1659,233 @@ def test_scan_service_timeout_env_var_respected(tmp_path, monkeypatch):
         # Timeout of 0 → polling loop never runs → timeout error
         assert result.exit_code == 1
         assert "0s" in result.output or "did not become ready" in result.output
+
+
+# ── Phase 3: First-run UX and next-step suggestions ──────────────────────────
+
+def test_scan_first_run_shows_initialized_project_line(tmp_path):
+    """On first run (no .rei/project.toml), output shows '✓ Initialized project: <name>'."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    # No .rei/project.toml — first run
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "✓ Initialized project:" in result.output
+        assert ".rei/project.toml created" in result.output
+        # Should NOT show plain "✓ Project:" line when initializing
+        lines = [l for l in result.output.splitlines() if l.startswith("✓ Project:")]
+        assert lines == [], f"Should not show '✓ Project:' on first run, got: {result.output}"
+
+
+def test_scan_repeat_run_shows_project_line_not_initialized(tmp_path):
+    """On repeat run (.rei/project.toml already exists), output shows '✓ Project:' not 'Initialized'."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "myapp"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "✓ Project: myapp" in result.output
+        assert "Initialized" not in result.output
+
+
+def test_scan_first_scan_shows_next_step_suggestions(tmp_path):
+    """On first scan (last_scanned_at is None), output includes next-step suggestions."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "myapp"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None  # No previous scan → last_scanned_at = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Next steps" in result.output
+        assert "rei query" in result.output
+        assert "rei impact" in result.output
+        assert "rei mcp" in result.output
+
+
+def test_scan_repeat_scan_omits_next_step_suggestions(tmp_path):
+    """On repeat scan (last_scanned_at is set), next-step suggestions are NOT shown."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    last_scanned = "2026-04-18T10:00:00+00:00"
+
+    git_log_result = MagicMock()
+    git_log_result.returncode = 0
+    git_log_result.stdout = "src/app.ts\n"
+
+    git_log_deleted_result = MagicMock()
+    git_log_deleted_result.returncode = 0
+    git_log_deleted_result.stdout = ""
+
+    ingester_result = MagicMock()
+    ingester_result.returncode = 0
+    ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+    ingester_result.stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git" and "--diff-filter=D" in cmd:
+            return git_log_deleted_result
+        if cmd[0] == "git":
+            return git_log_result
+        return ingester_result
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client.get_project.return_value = {
+            "id": str(tmp_path.resolve()),
+            "last_scanned_at": last_scanned,
+        }
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Next steps" not in result.output
+
+
+def test_scan_corrupt_config_warns_and_regenerates(tmp_path):
+    """Corrupt .rei/project.toml triggers a warning, regenerates defaults, and scan continues."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    # Write a corrupt config file
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text("this is not valid toml =[[[")
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Warning about corrupt/invalid config
+        assert "corrupt" in result.output.lower() or "invalid" in result.output.lower()
+        # Scan continues successfully
+        assert "Graph updated" in result.output
+        # Config was regenerated with valid TOML
+        import tomllib
+        with open(tmp_path / ".rei" / "project.toml", "rb") as f:
+            config = tomllib.load(f)
+        assert "project" in config
+
+
+def test_scan_force_flag_does_not_show_next_steps_on_known_project(tmp_path):
+    """--force on a known project (has last_scanned_at) does full scan but omits next-step suggestions."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client.get_project.return_value = {
+            "id": str(tmp_path.resolve()),
+            "last_scanned_at": "2026-04-18T10:00:00+00:00",
+        }
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--force"])
+
+        assert result.exit_code == 0
+        assert "Next steps" not in result.output

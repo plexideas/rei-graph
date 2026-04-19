@@ -126,23 +126,32 @@ def _find_ingester() -> Path:
     raise FileNotFoundError("TS ingester not found. Run 'npm run build' in packages/ingester_ts/")
 
 
-def _resolve_project(root: Path) -> tuple[str, str]:
+def _resolve_project(root: Path) -> tuple[str, str, bool]:
     """Resolve project identity for *root*, auto-creating .rei/project.toml if needed.
 
-    Returns ``(project_id, project_name)``.
+    Returns ``(project_id, project_name, config_was_created)`` where
+    ``config_was_created`` is True when .rei/project.toml did not exist and was
+    just generated with defaults.
     """
     project_id = str(root.resolve())
     config_path = root / ".rei" / "project.toml"
+    config_was_created = False
     if not config_path.exists():
         project_name = root.resolve().name
         config = generate_default_config(project_name, project_id=project_id)
         write_config(config_path, config)
+        config_was_created = True
     else:
         try:
             project_name = read_config(config_path).get("project", {}).get("name") or root.resolve().name
         except Exception:
             project_name = root.resolve().name
-    return project_id, project_name
+            click.echo(
+                f"⚠ .rei/project.toml is corrupt or invalid. Regenerating with defaults."
+            )
+            config = generate_default_config(project_name, project_id=project_id)
+            write_config(config_path, config)
+    return project_id, project_name, config_was_created
 
 
 def _parse_ingester_output(raw: str) -> ScanResult:
@@ -290,6 +299,16 @@ def _get_deleted_files_since(root: Path, since: str) -> list[str]:
     return unique
 
 
+def _print_next_steps() -> None:
+    """Print post-scan next-step suggestions (shown on first scan only)."""
+    click.echo(
+        "\nNext steps:\n"
+        "  rei query \"auth\"        Search the graph\n"
+        "  rei impact src/app.ts   Analyze change impact\n"
+        "  rei mcp                 Start MCP server"
+    )
+
+
 @click.command()
 @click.argument("file_path", default=".", required=False)
 @click.option("--changed", is_flag=True, default=False, help="Only scan git-changed files")
@@ -304,10 +323,13 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
 
     # Resolve project identity (auto-init .rei/project.toml if missing)
     project_root = path if path.is_dir() else path.parent
-    project_id, project_name = _resolve_project(project_root)
+    project_id, project_name, config_was_created = _resolve_project(project_root)
     prefix = project_hash(project_id)
 
-    click.echo(f"✓ Project: {project_name}")
+    if config_was_created:
+        click.echo(f"✓ Initialized project: {project_name} (.rei/project.toml created)")
+    else:
+        click.echo(f"✓ Project: {project_name}")
 
     # Phase 2: Service health check and auto-start
     if not _ensure_neo4j_ready():
@@ -319,23 +341,26 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
 
     # Repeat-scan detection: check if project was already scanned
     client = Neo4jClient(project_id=project_id)
+    is_first_scan = True  # True when last_scanned_at is None (never been scanned)
     try:
         project_info = client.get_project()
-        if project_info and project_info.get("last_scanned_at") and not force:
-            last_ts = project_info["last_scanned_at"]
-            changed_files = _get_changed_files_since(project_root, last_ts)
-            deleted_files = _get_deleted_files_since(project_root, last_ts)
-            file_count = len(changed_files) + len(deleted_files)
-            click.echo(f"✓ Mode: incremental ({file_count} file(s) changed)")
-            _scan_changed_since(
-                path,
-                since=last_ts,
-                verbose=verbose,
-                project_id=project_id,
-                project_prefix=prefix,
-                client=client,
-            )
-            return
+        if project_info and project_info.get("last_scanned_at"):
+            is_first_scan = False
+            if not force:
+                last_ts = project_info["last_scanned_at"]
+                changed_files = _get_changed_files_since(project_root, last_ts)
+                deleted_files = _get_deleted_files_since(project_root, last_ts)
+                file_count = len(changed_files) + len(deleted_files)
+                click.echo(f"✓ Mode: incremental ({file_count} file(s) changed)")
+                _scan_changed_since(
+                    path,
+                    since=last_ts,
+                    verbose=verbose,
+                    project_id=project_id,
+                    project_prefix=prefix,
+                    client=client,
+                )
+                return
     except Exception:
         pass
 
@@ -381,6 +406,8 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
         elapsed = time.monotonic() - start_time
         client.update_last_scanned()
         progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
+        if is_first_scan:
+            _print_next_steps()
     else:
         click.echo("✓ Mode: full scan (1 file)")
         start_time = time.monotonic()
@@ -413,6 +440,8 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
             total_nodes=len(scan_result.nodes),
             total_rels=len(scan_result.relationships),
         )
+        if is_first_scan:
+            _print_next_steps()
 
 
 def _scan_changed(root: Path, verbose: bool = False, project_id: str | None = None, project_prefix: str | None = None) -> None:
