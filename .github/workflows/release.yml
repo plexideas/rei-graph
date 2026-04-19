@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Node.js (TS ingester build) ──────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: packages/ingester_ts/package.json
+
+      # ── Python / uv ──────────────────────────────────────────────────────
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      # ── Build ─────────────────────────────────────────────────────────────
+      - name: Bundle TS ingester into CLI package
+        run: ./scripts/bundle_ingester.sh
+
+      - name: Build Python wheel and sdist
+        run: uv build --package rei-cli --out-dir dist/
+
+      # ── Extract version from tag (strips leading "v") ─────────────────────
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # ── GitHub Release ────────────────────────────────────────────────────
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "rei-graph ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            dist/*.whl dist/*.tar.gz
+
+      # ── Homebrew tap update ───────────────────────────────────────────────
+      - name: Compute source tarball SHA256
+        id: tarball
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          URL="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
+          curl -fsSL "$URL" -o /tmp/rei-graph-source.tar.gz
+          echo "sha256=$(sha256sum /tmp/rei-graph-source.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew tap formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA256="${{ steps.tarball.outputs.sha256 }}"
+          URL="${{ steps.tarball.outputs.url }}"
+
+          git clone \
+            "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/plexideas/homebrew-tap.git" \
+            tap-repo
+          cd tap-repo
+
+          sed -i "s|url \".*\"|url \"${URL}\"|" Formula/rei-graph.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/rei-graph.rb
+          sed -i "s|version \".*\"|version \"${VERSION}\"|" Formula/rei-graph.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/rei-graph.rb
+          git diff --staged --quiet || git commit -m "Update rei-graph to ${VERSION}"
+          git push
