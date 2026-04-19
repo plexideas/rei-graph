@@ -7,19 +7,17 @@ name = "rei-cli"
 version = "0.1.1"
 description = "CLI for rei-graph"
 requires-python = ">=3.11"
-dependencies = [
-  "click>=8.0",
-  "rich>=13.0",
-  "tomli-w>=1.0",
-  "pydantic>=2.0",
-  "neo4j>=5.0",
-  "mcp>=1.0",
-]
+dependencies = ["click>=8.0", "rich>=13.0", "rei-core", "rei-storage", "rei-mcp"]
 
 [project.scripts]
 rei = "rei_cli.main:cli"
 
 [tool.hatch.build.targets.wheel]
-# src/rei_core, src/rei_storage, src/rei_mcp are copied by CI before uv build
-# (scripts/bundle_ingester.sh also copies _ingester/ for the TS binary)
-packages = ["src/rei_cli", "src/rei_core", "src/rei_storage", "src/rei_mcp"]
+# At release time the CI patches this file and copies workspace package
+# sources in before running uv build (see .github/workflows/release.yml)
+packages = ["src/rei_cli"]
+
+[tool.uv.sources]
+rei-core = { workspace = true }
+rei-storage = { workspace = true }
+rei-mcp = { workspace = true }
