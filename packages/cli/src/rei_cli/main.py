@@ -12,6 +12,7 @@ from rei_cli.commands.plan import plan, plans
 from rei_cli.commands.query import query
 from rei_cli.commands.scan import scan
 from rei_cli.commands.snapshot import snapshot
+from rei_cli.commands.update import update
 
 
 @click.group()
@@ -35,3 +36,4 @@ cli.add_command(plan)
 cli.add_command(plans)
 cli.add_command(mcp_command, name="mcp")
 cli.add_command(delete_project)
+cli.add_command(update)
