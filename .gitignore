@@ -9,6 +9,9 @@ build/
 
 # Generated build artifacts
 packages/cli/src/rei_cli/_ingester/
+packages/cli/src/rei_core/
+packages/cli/src/rei_storage/
+packages/cli/src/rei_mcp/
 
 
 # Environment

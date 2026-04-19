@@ -34,8 +34,12 @@ jobs:
         run: uv python install 3.12
 
       # ── Build ─────────────────────────────────────────────────────────────
-      - name: Bundle TS ingester into CLI package
-        run: ./scripts/bundle_ingester.sh
+      - name: Bundle TS ingester and workspace packages into CLI
+        run: |
+          ./scripts/bundle_ingester.sh
+          cp -r packages/core/src/rei_core packages/cli/src/
+          cp -r packages/storage/src/rei_storage packages/cli/src/
+          cp -r packages/mcp_server/src/rei_mcp packages/cli/src/
 
       - name: Build Python wheel and sdist
         run: uv build --package rei-cli --out-dir dist/
