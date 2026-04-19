@@ -1,20 +1,101 @@
 import json
+import os
+import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 import click
+from rich.console import Console
+from rich.live import Live
+from rich.spinner import Spinner
 
 from rei_core.config import generate_default_config, read_config, write_config
 from rei_core.hashing import project_hash
 from rei_core.schemas import GraphNode, GraphRelationship, ScanResult
-from rei_storage.neo4j_client import Neo4jClient
+from rei_storage.neo4j_client import Neo4jClient, check_neo4j_health
 from rei_cli.progress import ScanProgress
 
 TS_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx"}
 
 # Path to the ingester bundled inside the installed package (populated at build time)
 _PACKAGE_INGESTER_PATH: Path = Path(__file__).resolve().parent / "_ingester" / "cli.js"
+
+# Path to the compose file bundled with the rei package (used for Neo4j auto-start)
+_PACKAGE_COMPOSE_PATH: Path = Path(__file__).resolve().parent / "_compose" / "docker-compose.yml"
+
+_DOCKER_INSTALL_URL = "https://docs.docker.com/get-docker/"
+_SERVICE_TIMEOUT_DEFAULT = 30
+
+
+def _ensure_neo4j_ready() -> bool:
+    """Probe Neo4j health and auto-start via Docker if not running.
+
+    Prints status lines to stdout.  Returns True when Neo4j is ready, False
+    when it cannot be started (caller should exit with a non-zero code).
+    """
+    health = check_neo4j_health()
+    if health["status"] == "healthy":
+        click.echo("✓ Neo4j: connected")
+        return True
+
+    # Neo4j is not running — check Docker availability
+    if not shutil.which("docker"):
+        click.echo(
+            "✗ Neo4j is not running. The graph database is required to store scan results.\n"
+            "  Docker is not installed. rei needs Docker to run Neo4j locally.\n"
+            f"  Install Docker: {_DOCKER_INSTALL_URL}\n"
+            "  Then run: rei scan"
+        )
+        return False
+
+    # Docker available — auto-start
+    click.echo("Neo4j is not running. Starting...")
+
+    compose_path = _PACKAGE_COMPOSE_PATH
+    if not compose_path.exists():
+        # Fallback: walk up from this file looking for docker-compose.yml (dev/monorepo)
+        for parent in Path(__file__).resolve().parents:
+            candidate = parent / "docker-compose.yml"
+            if candidate.exists():
+                compose_path = candidate
+                break
+
+    result = subprocess.run(
+        ["docker", "compose", "-f", str(compose_path), "up", "-d"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        click.echo(
+            f"✗ Failed to start Neo4j: {result.stderr.strip()}\n"
+            "  Run: rei doctor"
+        )
+        return False
+
+    # Poll for readiness with a spinner
+    timeout = int(os.environ.get("REI_SERVICE_TIMEOUT", _SERVICE_TIMEOUT_DEFAULT))
+    deadline = time.monotonic() + timeout
+
+    console = Console()
+    with Live(
+        Spinner("dots", text="Waiting for Neo4j to be ready..."),
+        console=console,
+        transient=True,
+    ):
+        while time.monotonic() < deadline:
+            health = check_neo4j_health()
+            if health["status"] == "healthy":
+                click.echo("✓ Neo4j: connected")
+                return True
+            time.sleep(1)
+
+    click.echo(
+        f"✗ Neo4j did not become ready within {timeout}s.\n"
+        "  Try running: rei doctor"
+    )
+    return False
 
 
 def _find_ingester() -> Path:
@@ -228,13 +309,16 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
 
     click.echo(f"✓ Project: {project_name}")
 
+    # Phase 2: Service health check and auto-start
+    if not _ensure_neo4j_ready():
+        sys.exit(1)
+
     if changed:
         _scan_changed(path, verbose=verbose, project_id=project_id, project_prefix=prefix)
         return
 
     # Repeat-scan detection: check if project was already scanned
     client = Neo4jClient(project_id=project_id)
-    click.echo("✓ Neo4j: connected")
     try:
         project_info = client.get_project()
         if project_info and project_info.get("last_scanned_at") and not force:

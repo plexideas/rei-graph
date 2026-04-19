@@ -1431,3 +1431,231 @@ def test_scan_output_incremental_mode_label(tmp_path):
 
         assert result.exit_code == 0
         assert "✓ Mode: incremental" in result.output
+
+
+# ── Phase 2: Service health check and auto-start ──────────────────────────────
+
+def _make_scan_env(tmp_path):
+    """Create a minimal project dir with one TS file and .rei/project.toml."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+
+def test_scan_neo4j_healthy_no_docker_call(tmp_path):
+    """When Neo4j is healthy, docker compose is never called."""
+    _make_scan_env(tmp_path)
+
+    with patch("rei_cli.commands.scan.check_neo4j_health",
+               return_value={"status": "healthy", "url": "http://localhost:7474"}), \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        ingester_result = MagicMock()
+        ingester_result.returncode = 0
+        ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+        ingester_result.stderr = ""
+        mock_subprocess.run.return_value = ingester_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "✓ Neo4j: connected" in result.output
+        # docker compose must NOT have been called
+        docker_calls = [c for c in mock_subprocess.run.call_args_list
+                        if c[0][0][0] == "docker"]
+        assert len(docker_calls) == 0
+
+
+def test_scan_auto_starts_neo4j_when_unhealthy_and_docker_available(tmp_path, monkeypatch):
+    """When Neo4j is down and Docker is available, CLI starts it and continues scanning."""
+    _make_scan_env(tmp_path)
+    monkeypatch.setenv("REI_SERVICE_TIMEOUT", "30")
+
+    # First health call → unhealthy; subsequent (polling) → healthy
+    health_side_effect = [
+        {"status": "unhealthy", "url": "http://localhost:7474", "error": "refused"},
+        {"status": "healthy", "url": "http://localhost:7474"},
+    ]
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        if cmd[0] == "docker":
+            result.returncode = 0
+            result.stdout = ""
+            result.stderr = ""
+            return result
+        # node (ingester)
+        result.returncode = 0
+        result.stdout = SAMPLE_INGESTER_OUTPUT
+        result.stderr = ""
+        return result
+
+    with patch("rei_cli.commands.scan.check_neo4j_health", side_effect=health_side_effect), \
+         patch("rei_cli.commands.scan.shutil") as mock_shutil, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find, \
+         patch("rei_cli.commands.scan.time.sleep"):  # avoid real sleeping
+
+        mock_shutil.which.return_value = "/usr/local/bin/docker"
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+        mock_find.return_value = Path("/fake/cli.js")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Starting" in result.output
+        assert "✓ Neo4j: connected" in result.output
+
+        # docker compose up -d was called
+        docker_calls = [c for c in mock_subprocess.run.call_args_list
+                        if c[0][0][0] == "docker"]
+        assert len(docker_calls) == 1
+        cmd = docker_calls[0][0][0]
+        assert "compose" in cmd
+        assert "up" in cmd
+        assert "-d" in cmd
+
+
+def test_scan_uses_bundled_compose_file(tmp_path, monkeypatch):
+    """docker compose up -d is invoked with the bundled compose file path."""
+    _make_scan_env(tmp_path)
+    monkeypatch.setenv("REI_SERVICE_TIMEOUT", "30")
+
+    # Create a real (temp) file that acts as the bundled compose
+    bundled_compose = tmp_path / "bundled-compose.yml"
+    bundled_compose.write_text("# fake bundled compose")
+
+    health_side_effect = [
+        {"status": "unhealthy", "url": "http://localhost:7474"},
+        {"status": "healthy", "url": "http://localhost:7474"},
+    ]
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = SAMPLE_INGESTER_OUTPUT
+        result.stderr = ""
+        return result
+
+    with patch("rei_cli.commands.scan.check_neo4j_health", side_effect=health_side_effect), \
+         patch("rei_cli.commands.scan.shutil") as mock_shutil, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find, \
+         patch("rei_cli.commands.scan.time.sleep"), \
+         patch("rei_cli.commands.scan._PACKAGE_COMPOSE_PATH", bundled_compose):
+
+        mock_shutil.which.return_value = "/usr/local/bin/docker"
+        mock_subprocess.run.side_effect = fake_run
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+        mock_find.return_value = Path("/fake/cli.js")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        docker_calls = [c for c in mock_subprocess.run.call_args_list
+                        if c[0][0][0] == "docker"]
+        assert len(docker_calls) == 1
+        cmd = docker_calls[0][0][0]
+        # -f flag and bundled path are passed
+        assert "-f" in cmd
+        f_idx = cmd.index("-f")
+        assert str(bundled_compose) == cmd[f_idx + 1]
+
+
+def test_scan_exits_with_error_when_no_docker(tmp_path):
+    """When Neo4j is down and Docker is not installed, exit code 1 with install link."""
+    _make_scan_env(tmp_path)
+
+    with patch("rei_cli.commands.scan.check_neo4j_health",
+               return_value={"status": "unhealthy", "url": "http://localhost:7474"}), \
+         patch("rei_cli.commands.scan.shutil") as mock_shutil, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
+
+        mock_shutil.which.return_value = None  # docker not found
+        mock_client_cls.return_value = MagicMock()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "Docker" in result.output
+        assert "https://docs.docker.com/get-docker/" in result.output
+
+
+def test_scan_exits_on_neo4j_readiness_timeout(tmp_path, monkeypatch):
+    """When Neo4j does not become ready within timeout, exit code 1 and suggest rei doctor."""
+    _make_scan_env(tmp_path)
+    # Timeout of 0 so the polling loop never executes
+    monkeypatch.setenv("REI_SERVICE_TIMEOUT", "0")
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        result.stderr = ""
+        return result
+
+    with patch("rei_cli.commands.scan.check_neo4j_health",
+               return_value={"status": "unhealthy", "url": "http://localhost:7474"}), \
+         patch("rei_cli.commands.scan.shutil") as mock_shutil, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
+
+        mock_shutil.which.return_value = "/usr/local/bin/docker"
+        mock_subprocess.run.side_effect = fake_run
+        mock_client_cls.return_value = MagicMock()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "rei doctor" in result.output
+
+
+def test_scan_service_timeout_env_var_respected(tmp_path, monkeypatch):
+    """REI_SERVICE_TIMEOUT env var controls the polling timeout."""
+    _make_scan_env(tmp_path)
+    monkeypatch.setenv("REI_SERVICE_TIMEOUT", "0")
+
+    with patch("rei_cli.commands.scan.check_neo4j_health",
+               return_value={"status": "unhealthy", "url": "http://localhost:7474"}), \
+         patch("rei_cli.commands.scan.shutil") as mock_shutil, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
+
+        mock_shutil.which.return_value = "/usr/local/bin/docker"
+        docker_result = MagicMock()
+        docker_result.returncode = 0
+        docker_result.stdout = ""
+        docker_result.stderr = ""
+        mock_subprocess.run.return_value = docker_result
+        mock_client_cls.return_value = MagicMock()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        # Timeout of 0 → polling loop never runs → timeout error
+        assert result.exit_code == 1
+        assert "0s" in result.output or "did not become ready" in result.output
