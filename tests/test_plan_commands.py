@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock
+from pathlib import Path
 
 from click.testing import CliRunner
 
@@ -61,3 +62,46 @@ def test_plans_shows_message_when_no_open_plans():
         assert result.exit_code == 0
         assert "no" in result.output.lower() or "0" in result.output
         mock_dag.close.assert_called_once()
+
+
+# ─── Project scoping ─────────────────────────────────────────────────────────
+
+def test_plan_resolves_project_id(tmp_path):
+    """dgk plan resolves the current directory as project_id and passes it to DagClient."""
+    # Create a .dgk/project.toml with a project id
+    dgk_dir = tmp_path / ".dgk"
+    dgk_dir.mkdir()
+    (dgk_dir / "project.toml").write_text(
+        '[project]\nid = "/home/user/myproject"\n'
+    )
+
+    with patch("dgk_cli.commands.plan.DagClient") as mock_cls, \
+         patch("dgk_cli.commands.plan._resolve_project_id", return_value="/home/user/myproject"):
+        mock_dag = MagicMock()
+        mock_cls.return_value = mock_dag
+        mock_dag.create_plan.return_value = "plan:abc123"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["plan", "refactor auth", "scan", "apply"])
+
+        assert result.exit_code == 0
+        mock_cls.assert_called_once()
+        _, kwargs = mock_cls.call_args
+        assert kwargs.get("project_id") == "/home/user/myproject"
+
+
+def test_plans_resolves_project_id():
+    """dgk plans resolves the current directory as project_id and passes it to DagClient."""
+    with patch("dgk_cli.commands.plan.DagClient") as mock_cls, \
+         patch("dgk_cli.commands.plan._resolve_project_id", return_value="/home/user/myproject"):
+        mock_dag = MagicMock()
+        mock_cls.return_value = mock_dag
+        mock_dag.list_open_plans.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["plans"])
+
+        assert result.exit_code == 0
+        mock_cls.assert_called_once()
+        _, kwargs = mock_cls.call_args
+        assert kwargs.get("project_id") == "/home/user/myproject"

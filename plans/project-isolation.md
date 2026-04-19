@@ -92,13 +92,13 @@ Update `MemoryClient` to accept `project_id` at construction. All memory node cr
 
 ### Acceptance criteria
 
-- [ ] `MemoryClient(project_id=...)` stores and uses `project_id` for all operations
-- [ ] Memory nodes created with `project_id` property; queries filter by it
-- [ ] `DagClient(project_id=...)` stores and uses `project_id` for all operations
-- [ ] DAG plan/step nodes created with `project_id` property; queries filter by it
-- [ ] `dgk plan` and `dgk plans` CLI commands resolve and pass `project_id`
-- [ ] Tests: two `MemoryClient` instances with different `project_id`s produce isolated results; same for `DagClient`
-- [ ] All existing tests pass (updated to supply `project_id`)
+- [x] `MemoryClient(project_id=...)` stores and uses `project_id` for all operations
+- [x] Memory nodes created with `project_id` property; queries filter by it
+- [x] `DagClient(project_id=...)` stores and uses `project_id` for all operations
+- [x] DAG plan/step nodes created with `project_id` property; queries filter by it
+- [x] `dgk plan` and `dgk plans` CLI commands resolve and pass `project_id`
+- [x] Tests: two `MemoryClient` instances with different `project_id`s produce isolated results; same for `DagClient`
+- [x] All existing tests pass (updated to supply `project_id`)
 
 ---
 

@@ -262,3 +262,95 @@ class TestGetRecentDecisions:
         client.get_recent_decisions()
         query_str = mock_session.run.call_args[0][0]
         assert "Decision" in query_str
+
+
+# ─── Project scoping ─────────────────────────────────────────────────────────
+
+class TestMemoryClientProjectScoping:
+    """Verify that MemoryClient with project_id stamps nodes and filters queries."""
+
+    def _make_client(self, project_id=None):
+        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+            mock_driver = MagicMock()
+            mock_session = MagicMock()
+            mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
+            mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+            mock_gdb.driver.return_value = mock_driver
+            from dgk_storage.memory_client import MemoryClient
+            client = MemoryClient(project_id=project_id)
+        return client, mock_session
+
+    def _all_params(self, mock_session):
+        """Collect all param dicts from session.run calls."""
+        return [c.args[1] if len(c.args) > 1 else c.kwargs for c in mock_session.run.call_args_list]
+
+    def _all_queries(self, mock_session):
+        return [c.args[0] for c in mock_session.run.call_args_list]
+
+    # -- record methods stamp project_id --
+
+    def test_record_analysis_stamps_project_id(self):
+        client, mock_session = self._make_client(project_id="/home/user/projectA")
+        client.record_analysis(scope="auth", findings="ok")
+        params_list = self._all_params(mock_session)
+        assert any(p.get("project_id") == "/home/user/projectA" for p in params_list)
+
+    def test_record_decision_stamps_project_id(self):
+        client, mock_session = self._make_client(project_id="/home/user/projectA")
+        client.record_decision(context="ctx", choice="c", rationale="r")
+        params_list = self._all_params(mock_session)
+        assert any(p.get("project_id") == "/home/user/projectA" for p in params_list)
+
+    def test_record_change_stamps_project_id(self):
+        client, mock_session = self._make_client(project_id="/home/user/projectA")
+        client.record_change(change_type="refactor", description="d")
+        params_list = self._all_params(mock_session)
+        assert any(p.get("project_id") == "/home/user/projectA" for p in params_list)
+
+    def test_record_validation_stamps_project_id(self):
+        client, mock_session = self._make_client(project_id="/home/user/projectA")
+        client.record_validation(val_type="test", status="passed", details="d")
+        params_list = self._all_params(mock_session)
+        assert any(p.get("project_id") == "/home/user/projectA" for p in params_list)
+
+    def test_record_plan_stamps_project_id(self):
+        client, mock_session = self._make_client(project_id="/home/user/projectA")
+        client.record_plan(goal="g", steps=["s1"])
+        params_list = self._all_params(mock_session)
+        assert any(p.get("project_id") == "/home/user/projectA" for p in params_list)
+
+    # -- query methods filter by project_id --
+
+    def test_get_recent_context_filters_by_project_id(self):
+        client, mock_session = self._make_client(project_id="/home/user/projectA")
+        mock_session.run.return_value = []
+        client.get_recent_context(query="auth")
+        params = mock_session.run.call_args[0][1]
+        assert params["project_id"] == "/home/user/projectA"
+        query_str = mock_session.run.call_args[0][0]
+        assert "project_id" in query_str
+
+    def test_get_recent_decisions_filters_by_project_id(self):
+        client, mock_session = self._make_client(project_id="/home/user/projectA")
+        mock_session.run.return_value = []
+        client.get_recent_decisions()
+        params = mock_session.run.call_args[0][1]
+        assert params["project_id"] == "/home/user/projectA"
+        query_str = mock_session.run.call_args[0][0]
+        assert "project_id" in query_str
+
+    # -- without project_id, legacy behavior preserved --
+
+    def test_no_project_id_legacy_record_analysis(self):
+        client, mock_session = self._make_client(project_id=None)
+        client.record_analysis(scope="auth", findings="ok")
+        params_list = self._all_params(mock_session)
+        for p in params_list:
+            assert "project_id" not in p
+
+    def test_no_project_id_legacy_get_recent_context(self):
+        client, mock_session = self._make_client(project_id=None)
+        mock_session.run.return_value = []
+        client.get_recent_context(query="auth")
+        params = mock_session.run.call_args[0][1]
+        assert "project_id" not in params

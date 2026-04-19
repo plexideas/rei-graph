@@ -199,3 +199,81 @@ class TestListOpenPlans:
         client = DagClient()
         result = client.list_open_plans()
         assert len(result) == 1
+
+
+# ─── Project scoping ─────────────────────────────────────────────────────────
+
+class TestDagClientProjectScoping:
+    """Verify that DagClient with project_id stamps nodes and filters queries."""
+
+    @pytest.fixture(autouse=True)
+    def setup_mock(self):
+        with patch("dgk_storage.dag_client.GraphDatabase") as mock_gdb:
+            self.mock_driver = MagicMock()
+            self.mock_session = MagicMock()
+            self.mock_driver.session.return_value.__enter__ = lambda s, *a: self.mock_session
+            self.mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+            mock_gdb.driver.return_value = self.mock_driver
+            yield
+
+    def _all_params(self):
+        return [c.args[1] if len(c.args) > 1 else c.kwargs for c in self.mock_session.run.call_args_list]
+
+    def _all_queries(self):
+        return [c.args[0] for c in self.mock_session.run.call_args_list]
+
+    # -- create_plan stamps project_id --
+
+    def test_create_plan_stamps_project_id(self):
+        client = DagClient(project_id="/home/user/projectA")
+        client.create_plan("refactor", ["scan"])
+        params_list = self._all_params()
+        assert any(p.get("project_id") == "/home/user/projectA" for p in params_list)
+
+    def test_create_plan_stamps_project_id_on_steps(self):
+        client = DagClient(project_id="/home/user/projectA")
+        client.create_plan("refactor", ["scan", "apply"])
+        queries = self._all_queries()
+        # The step creation queries should include project_id
+        step_queries = [q for q in queries if "DagStep" in q]
+        assert all("project_id" in q for q in step_queries)
+
+    # -- query methods filter by project_id --
+
+    def test_list_open_plans_filters_by_project_id(self):
+        self.mock_session.run.return_value.__iter__ = lambda s: iter([])
+        client = DagClient(project_id="/home/user/projectA")
+        client.list_open_plans()
+        params = self.mock_session.run.call_args[0][1]
+        assert params["project_id"] == "/home/user/projectA"
+        query_str = self.mock_session.run.call_args[0][0]
+        assert "project_id" in query_str
+
+    def test_get_plan_filters_by_project_id(self):
+        self.mock_session.run.return_value.single.return_value = None
+        client = DagClient(project_id="/home/user/projectA")
+        client.get_plan("plan:abc")
+        params = self.mock_session.run.call_args[0][1]
+        assert params.get("project_id") == "/home/user/projectA"
+
+    def test_cancel_plan_filters_by_project_id(self):
+        client = DagClient(project_id="/home/user/projectA")
+        client.cancel_plan("plan:abc")
+        params_list = self._all_params()
+        assert all(p.get("project_id") == "/home/user/projectA" for p in params_list)
+
+    # -- without project_id, legacy behavior preserved --
+
+    def test_no_project_id_legacy_create_plan(self):
+        client = DagClient()
+        client.create_plan("refactor", ["scan"])
+        params_list = self._all_params()
+        for p in params_list:
+            assert "project_id" not in p
+
+    def test_no_project_id_legacy_list_open_plans(self):
+        self.mock_session.run.return_value.__iter__ = lambda s: iter([])
+        client = DagClient()
+        client.list_open_plans()
+        params = self.mock_session.run.call_args[0][1]
+        assert "project_id" not in params
