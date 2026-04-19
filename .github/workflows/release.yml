@@ -53,6 +53,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "rei-graph ${{ steps.version.outputs.version }}" \
             --generate-notes \
+            --clobber \
             dist/*.whl dist/*.tar.gz
 
       # ── Homebrew tap update ───────────────────────────────────────────────
