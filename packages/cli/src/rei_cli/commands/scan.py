@@ -20,7 +20,7 @@ from rei_cli.progress import ScanProgress
 TS_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx"}
 
 # Path to the ingester bundled inside the installed package (populated at build time)
-_PACKAGE_INGESTER_PATH: Path = Path(__file__).resolve().parent / "_ingester" / "cli.js"
+_PACKAGE_INGESTER_PATH: Path = Path(__file__).resolve().parent.parent / "_ingester" / "cli.js"
 
 # Path to the compose file bundled with the rei package (used for Neo4j auto-start)
 _PACKAGE_COMPOSE_PATH: Path = Path(__file__).resolve().parent.parent / "_compose" / "docker-compose.yml"
@@ -52,7 +52,7 @@ def _ensure_neo4j_ready() -> bool:
         return False
 
     # Docker available — auto-start
-    click.echo("Neo4j is not running. Starting...")
+    click.echo("Neo4j is not running. Starting... (first run may take a minute to pull the image)")
 
     compose_path = _PACKAGE_COMPOSE_PATH
     if not compose_path.exists():
@@ -63,14 +63,27 @@ def _ensure_neo4j_ready() -> bool:
                 compose_path = candidate
                 break
 
-    result = subprocess.run(
-        ["docker", "compose", "-f", str(compose_path), "up", "-d"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
+    console = Console()
+    returncode = 1
+    stderr_output = ""
+
+    with Live(
+        Spinner("dots", text="Pulling and starting Neo4j..."),
+        console=console,
+        transient=True,
+    ):
+        process = subprocess.Popen(
+            ["docker", "compose", "-f", str(compose_path), "up", "-d"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        _, stderr_output = process.communicate()
+        returncode = process.returncode
+
+    if returncode != 0:
         click.echo(
-            f"✗ Failed to start Neo4j: {result.stderr.strip()}\n"
+            f"✗ Failed to start Neo4j: {(stderr_output or '').strip()}\n"
             "  Run: rei doctor"
         )
         return False
@@ -79,7 +92,6 @@ def _ensure_neo4j_ready() -> bool:
     timeout = int(os.environ.get("REI_SERVICE_TIMEOUT", _SERVICE_TIMEOUT_DEFAULT))
     deadline = time.monotonic() + timeout
 
-    console = Console()
     with Live(
         Spinner("dots", text="Waiting for Neo4j to be ready..."),
         console=console,
