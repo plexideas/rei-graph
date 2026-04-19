@@ -50,3 +50,6 @@ jobs:
 
       - name: Typecheck ingester
         run: cd packages/ingester_ts && npx tsc --noEmit
+
+      - name: Smoke test bundled ingester
+        run: cd packages/ingester_ts && npm run test:runtime
