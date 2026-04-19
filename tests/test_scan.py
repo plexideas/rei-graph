@@ -1491,11 +1491,6 @@ def test_scan_auto_starts_neo4j_when_unhealthy_and_docker_available(tmp_path, mo
 
     def fake_run(cmd, **kwargs):
         result = MagicMock()
-        if cmd[0] == "docker":
-            result.returncode = 0
-            result.stdout = ""
-            result.stderr = ""
-            return result
         # node (ingester)
         result.returncode = 0
         result.stdout = SAMPLE_INGESTER_OUTPUT
@@ -1510,6 +1505,12 @@ def test_scan_auto_starts_neo4j_when_unhealthy_and_docker_available(tmp_path, mo
          patch("rei_cli.commands.scan.time.sleep"):  # avoid real sleeping
 
         mock_shutil.which.return_value = "/usr/local/bin/docker"
+        # docker compose up -d → Popen
+        fake_popen = MagicMock()
+        fake_popen.communicate.return_value = ("", "")
+        fake_popen.returncode = 0
+        mock_subprocess.Popen.return_value = fake_popen
+        # node ingester → run
         mock_subprocess.run.side_effect = fake_run
 
         mock_client = MagicMock()
@@ -1524,11 +1525,9 @@ def test_scan_auto_starts_neo4j_when_unhealthy_and_docker_available(tmp_path, mo
         assert "Starting" in result.output
         assert "✓ Neo4j: connected" in result.output
 
-        # docker compose up -d was called
-        docker_calls = [c for c in mock_subprocess.run.call_args_list
-                        if c[0][0][0] == "docker"]
-        assert len(docker_calls) == 1
-        cmd = docker_calls[0][0][0]
+        # docker compose up -d was called via Popen
+        assert mock_subprocess.Popen.call_count == 1
+        cmd = mock_subprocess.Popen.call_args[0][0]
         assert "compose" in cmd
         assert "up" in cmd
         assert "-d" in cmd
@@ -1564,6 +1563,12 @@ def test_scan_uses_bundled_compose_file(tmp_path, monkeypatch):
          patch("rei_cli.commands.scan._PACKAGE_COMPOSE_PATH", bundled_compose):
 
         mock_shutil.which.return_value = "/usr/local/bin/docker"
+        # docker compose up -d → Popen
+        fake_popen = MagicMock()
+        fake_popen.communicate.return_value = ("", "")
+        fake_popen.returncode = 0
+        mock_subprocess.Popen.return_value = fake_popen
+        # node ingester → run
         mock_subprocess.run.side_effect = fake_run
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
@@ -1574,10 +1579,8 @@ def test_scan_uses_bundled_compose_file(tmp_path, monkeypatch):
         result = runner.invoke(cli, ["scan", str(tmp_path)])
 
         assert result.exit_code == 0
-        docker_calls = [c for c in mock_subprocess.run.call_args_list
-                        if c[0][0][0] == "docker"]
-        assert len(docker_calls) == 1
-        cmd = docker_calls[0][0][0]
+        assert mock_subprocess.Popen.call_count == 1
+        cmd = mock_subprocess.Popen.call_args[0][0]
         # -f flag and bundled path are passed
         assert "-f" in cmd
         f_idx = cmd.index("-f")
@@ -1610,13 +1613,6 @@ def test_scan_exits_on_neo4j_readiness_timeout(tmp_path, monkeypatch):
     # Timeout of 0 so the polling loop never executes
     monkeypatch.setenv("REI_SERVICE_TIMEOUT", "0")
 
-    def fake_run(cmd, **kwargs):
-        result = MagicMock()
-        result.returncode = 0
-        result.stdout = ""
-        result.stderr = ""
-        return result
-
     with patch("rei_cli.commands.scan.check_neo4j_health",
                return_value={"status": "unhealthy", "url": "http://localhost:7474"}), \
          patch("rei_cli.commands.scan.shutil") as mock_shutil, \
@@ -1624,7 +1620,10 @@ def test_scan_exits_on_neo4j_readiness_timeout(tmp_path, monkeypatch):
          patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
 
         mock_shutil.which.return_value = "/usr/local/bin/docker"
-        mock_subprocess.run.side_effect = fake_run
+        fake_popen = MagicMock()
+        fake_popen.communicate.return_value = ("", "")
+        fake_popen.returncode = 0
+        mock_subprocess.Popen.return_value = fake_popen
         mock_client_cls.return_value = MagicMock()
 
         runner = CliRunner()
@@ -1646,11 +1645,10 @@ def test_scan_service_timeout_env_var_respected(tmp_path, monkeypatch):
          patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
 
         mock_shutil.which.return_value = "/usr/local/bin/docker"
-        docker_result = MagicMock()
-        docker_result.returncode = 0
-        docker_result.stdout = ""
-        docker_result.stderr = ""
-        mock_subprocess.run.return_value = docker_result
+        fake_popen = MagicMock()
+        fake_popen.communicate.return_value = ("", "")
+        fake_popen.returncode = 0
+        mock_subprocess.Popen.return_value = fake_popen
         mock_client_cls.return_value = MagicMock()
 
         runner = CliRunner()
@@ -2103,3 +2101,95 @@ def test_scan_verbose_flag_shows_traceback_on_unexpected_error(tmp_path):
         assert result.exit_code == 1
         # Traceback details should appear in verbose mode
         assert "Traceback" in result.output or "RuntimeError" in result.output
+
+
+# ── Regression: bundled ingester must include parser.js sibling ───────────────
+
+ERR_MODULE_NOT_FOUND_STDERR = (
+    "node:internal/modules/esm/resolve:274\n"
+    "    throw new ERR_MODULE_NOT_FOUND(\n"
+    "          ^\n\n"
+    "Error [ERR_MODULE_NOT_FOUND]: Cannot find module\n"
+    "'/opt/homebrew/.../rei_cli/_ingester/parser.js' imported from\n"
+    "/opt/homebrew/.../rei_cli/_ingester/cli.js\n"
+    "    at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n"
+    "  code: 'ERR_MODULE_NOT_FOUND',\n"
+    "  url: 'file:///opt/homebrew/.../rei_cli/_ingester/parser.js'\n"
+    "}\n"
+    "Node.js v24.10.0\n"
+)
+
+
+def test_ingester_missing_parser_sibling_reported_as_per_file_warning(tmp_path):
+    """Regression: when parser.js is missing from _ingester/, each file gets a warning.
+
+    This reproduces the v0.2.3 bug where bundle_ingester.sh only copied cli.js
+    but not parser.js. Node.js raised ERR_MODULE_NOT_FOUND for every file, and
+    they appeared as parse-failure warnings in the scan summary.
+    """
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (src / "utils.ts").write_text("export function helper() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "myapp"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    broken_result = MagicMock()
+    broken_result.returncode = 1
+    broken_result.stdout = ""
+    broken_result.stderr = ERR_MODULE_NOT_FOUND_STDERR
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/_ingester/cli.js")
+        mock_subprocess.run.return_value = broken_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+    # Scan completes (no sys.exit on per-file errors) but all files are warnings
+    assert result.exit_code == 0
+    assert "warning" in result.output.lower()
+    assert "failed to parse" in result.output.lower()
+    # Both files are reported as failures
+    assert "app.ts" in result.output
+    assert "utils.ts" in result.output
+    # Zero nodes/rels written because every parse failed
+    assert "0 nodes, 0 rels" in result.output
+
+
+def test_find_ingester_bundled_dir_must_contain_both_cli_and_parser(tmp_path):
+    """Documents the bundle contract: _ingester/ must have both cli.js and parser.js.
+
+    _find_ingester() returns the bundled cli.js path when cli.js exists.
+    The companion parser.js must be placed alongside it by bundle_ingester.sh
+    (via 'cp dist/*.js _ingester/' rather than 'cp dist/cli.js _ingester/cli.js').
+    """
+    from rei_cli.commands.scan import _find_ingester
+    import rei_cli.commands.scan as scan_module
+
+    ingester_dir = tmp_path / "_ingester"
+    ingester_dir.mkdir()
+
+    cli_js = ingester_dir / "cli.js"
+    parser_js = ingester_dir / "parser.js"
+    cli_js.write_text("// bundled cli")
+    parser_js.write_text("// bundled parser")
+
+    with patch.object(scan_module, "_PACKAGE_INGESTER_PATH", cli_js):
+        result = _find_ingester()
+
+    # cli.js is returned; parser.js sibling must also exist in the same dir
+    assert result == cli_js
+    assert parser_js.exists(), (
+        "parser.js must be bundled alongside cli.js — "
+        "bundle_ingester.sh must copy dist/*.js not just dist/cli.js"
+    )

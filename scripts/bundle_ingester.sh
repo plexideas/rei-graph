@@ -20,6 +20,6 @@ npm run build
 echo "Copying compiled output to ${DEST_DIR}..."
 rm -rf "${DEST_DIR}"
 mkdir -p "${DEST_DIR}"
-cp dist/cli.js "${DEST_DIR}/cli.js"
+cp dist/*.js "${DEST_DIR}/"
 
-echo "Done. Bundled ingester is at ${DEST_DIR}/cli.js"
+echo "Done. Bundled ingester is at ${DEST_DIR}/"
