@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: packages/ingester_ts/package.json
+          cache-dependency-path: packages/ingester_ts/package-lock.json
 
       # ── Python / uv ──────────────────────────────────────────────────────
       - name: Install uv
