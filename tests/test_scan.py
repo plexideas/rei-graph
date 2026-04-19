@@ -37,6 +37,7 @@ def test_scan_invokes_ingester_and_writes_to_neo4j(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(ts_file)])
@@ -61,8 +62,9 @@ def test_scan_reports_ingester_failure(tmp_path):
     ts_file.write_text("invalid content")
 
     with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient"):
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls:
 
+        mock_client_cls.return_value.get_project.return_value = None
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stdout = ""
@@ -114,6 +116,7 @@ def test_scan_directory_scans_all_ts_files(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -153,6 +156,7 @@ def test_scan_directory_respects_exclude_patterns(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -217,6 +221,7 @@ def test_scan_directory_stores_resolved_import_paths(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -278,6 +283,7 @@ def test_scan_stores_package_nodes_and_depends_on(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -346,6 +352,7 @@ def test_scan_changed_only_scans_git_modified_files(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
@@ -376,6 +383,7 @@ def test_scan_changed_reports_no_changes_when_git_diff_empty(tmp_path):
         mock_subprocess.run.return_value = git_result
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
@@ -411,6 +419,7 @@ def test_scan_changed_removes_nodes_for_deleted_files(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
@@ -447,6 +456,7 @@ def test_scan_directory_summary_contains_elapsed_time(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -486,6 +496,7 @@ def test_scan_directory_verbose_shows_per_file_detail(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path), "--verbose"])
@@ -523,6 +534,7 @@ def test_scan_directory_verbose_short_flag(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path), "-v"])
@@ -568,6 +580,7 @@ def test_scan_directory_no_inline_warnings(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -604,6 +617,7 @@ def test_scan_single_file_output_contains_summary(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(ts_file)])
@@ -655,6 +669,7 @@ def test_scan_changed_summary_contains_elapsed_time(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
@@ -707,6 +722,7 @@ def test_scan_changed_verbose_shows_per_file_detail(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path), "--changed", "--verbose"])
@@ -737,6 +753,7 @@ def test_scan_empty_directory_prints_no_files_message(tmp_path):
         mock_find.return_value = Path("/fake/cli.js")
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -771,6 +788,7 @@ def test_scan_directory_non_tty_no_ansi(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)], color=False)
@@ -813,6 +831,7 @@ def test_scan_passes_project_prefix_to_ingester(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -853,6 +872,7 @@ def test_scan_constructs_neo4j_client_with_project_id(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -884,6 +904,7 @@ def test_scan_auto_inits_project_toml_when_missing(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path)])
@@ -922,6 +943,7 @@ def test_scan_single_file_passes_project_prefix(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(ts_file)])
@@ -980,6 +1002,7 @@ def test_scan_changed_passes_project_prefix_and_project_id(tmp_path):
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
@@ -995,3 +1018,234 @@ def test_scan_changed_passes_project_prefix_and_project_id(tmp_path):
         # Verify Neo4jClient was constructed with project_id
         mock_client_cls.assert_called_once_with(project_id=expected_project_id)
 
+
+# ── Project-isolation Phase 3: Repeat-scan detection + incremental auto-switch ──
+
+def test_scan_known_project_prints_warning_and_runs_incremental(tmp_path):
+    """dgk scan <dir> on a known project prints a warning and switches to incremental scan."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    last_scanned = "2026-04-18T10:00:00+00:00"
+
+    # git log --name-only returns one changed file
+    git_log_result = MagicMock()
+    git_log_result.returncode = 0
+    git_log_result.stdout = "src/app.ts\n"
+
+    # git log --diff-filter=D returns no deleted files
+    git_log_deleted_result = MagicMock()
+    git_log_deleted_result.returncode = 0
+    git_log_deleted_result.stdout = ""
+
+    ingester_result = MagicMock()
+    ingester_result.returncode = 0
+    ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+    ingester_result.stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git" and "--diff-filter=D" in cmd:
+            return git_log_deleted_result
+        if cmd[0] == "git":
+            return git_log_result
+        return ingester_result
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client.get_project.return_value = {
+            "id": str(tmp_path.resolve()),
+            "last_scanned_at": last_scanned,
+        }
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Warning should mention last scan timestamp and incremental
+        assert "already scanned" in result.output.lower() or "incremental" in result.output.lower()
+        assert last_scanned in result.output
+        # Should NOT do a full directory scan — should use git log --since
+        git_calls = [c for c in mock_subprocess.run.call_args_list if c[0][0][0] == "git"]
+        assert len(git_calls) >= 1
+        # At least one git call should contain --since
+        since_calls = [c for c in git_calls if "--since" in c[0][0]]
+        assert len(since_calls) >= 1
+
+
+def test_scan_known_project_force_does_full_rescan(tmp_path):
+    """dgk scan <dir> --force on a known project bypasses incremental and does a full scan."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client.get_project.return_value = {
+            "id": str(tmp_path.resolve()),
+            "last_scanned_at": "2026-04-18T10:00:00+00:00",
+        }
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--force"])
+
+        assert result.exit_code == 0
+        # Should NOT print incremental warning
+        assert "incremental" not in result.output.lower()
+        # Should do a full directory scan (ingester called for all files)
+        ingester_calls = [c for c in mock_subprocess.run.call_args_list if c[0][0][0] == "node"]
+        assert len(ingester_calls) >= 1
+
+
+def test_scan_first_time_no_warning(tmp_path):
+    """dgk scan <dir> on a first-time project does a full scan with no warning."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        # First-time: no Project node exists
+        mock_client.get_project.return_value = None
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # No warning about already scanned
+        assert "already scanned" not in result.output.lower()
+        assert "incremental" not in result.output.lower()
+        # Full scan — ingester called for each file
+        ingester_calls = [c for c in mock_subprocess.run.call_args_list if c[0][0][0] == "node"]
+        assert len(ingester_calls) >= 1
+
+
+def test_scan_updates_last_scanned_at_after_success(tmp_path):
+    """dgk scan <dir> updates last_scanned_at on the Project node after successful scan."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client.get_project.return_value = None
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # update_last_scanned should have been called once
+        mock_client.update_last_scanned.assert_called_once()
+
+
+def test_scan_known_project_no_changes_since_last_scan(tmp_path):
+    """dgk scan <dir> on known project with no changes since last scan reports no changes."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+
+    dgk = tmp_path / ".dgk"
+    dgk.mkdir()
+    (dgk / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    last_scanned = "2026-04-18T10:00:00+00:00"
+
+    # git returns no changed files
+    git_empty_result = MagicMock()
+    git_empty_result.returncode = 0
+    git_empty_result.stdout = ""
+
+    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.return_value = git_empty_result
+
+        mock_client = MagicMock()
+        mock_client.get_project.return_value = {
+            "id": str(tmp_path.resolve()),
+            "last_scanned_at": last_scanned,
+        }
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "no changed files" in result.output.lower() or "no " in result.output.lower()
+
+
+def test_scan_force_flag_documented_in_help():
+    """--force flag is documented in dgk scan --help output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--help"])
+    assert "--force" in result.output

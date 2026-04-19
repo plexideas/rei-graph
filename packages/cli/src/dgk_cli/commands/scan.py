@@ -140,6 +140,26 @@ def _get_changed_files(root: Path) -> list[str]:
     return [p for p in lines if Path(p).suffix in TS_EXTENSIONS]
 
 
+def _get_changed_files_since(root: Path, since: str) -> list[str]:
+    """Return TS/TSX files changed in commits since *since* (ISO timestamp)."""
+    result = subprocess.run(
+        ["git", "log", "--name-only", "--pretty=format:", "--since", since],
+        capture_output=True,
+        text=True,
+        cwd=root,
+    )
+    if result.returncode != 0:
+        return []
+    seen: set[str] = set()
+    unique: list[str] = []
+    for line in result.stdout.splitlines():
+        p = line.strip()
+        if p and p not in seen and Path(p).suffix in TS_EXTENSIONS:
+            seen.add(p)
+            unique.append(p)
+    return unique
+
+
 def _get_deleted_files(root: Path) -> list[str]:
     """Return list of git-deleted file paths relative to root."""
     result = subprocess.run(
@@ -153,11 +173,32 @@ def _get_deleted_files(root: Path) -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
+def _get_deleted_files_since(root: Path, since: str) -> list[str]:
+    """Return files deleted in commits since *since* (ISO timestamp)."""
+    result = subprocess.run(
+        ["git", "log", "--diff-filter=D", "--name-only", "--pretty=format:", "--since", since],
+        capture_output=True,
+        text=True,
+        cwd=root,
+    )
+    if result.returncode != 0:
+        return []
+    seen: set[str] = set()
+    unique: list[str] = []
+    for line in result.stdout.splitlines():
+        p = line.strip()
+        if p and p not in seen:
+            seen.add(p)
+            unique.append(p)
+    return unique
+
+
 @click.command()
 @click.argument("file_path")
 @click.option("--changed", is_flag=True, default=False, help="Only scan git-changed files")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Print per-file node/rel counts")
-def scan(file_path: str, changed: bool, verbose: bool):
+@click.option("--force", is_flag=True, default=False, help="Force full rescan even if project was scanned before")
+def scan(file_path: str, changed: bool, verbose: bool, force: bool):
     """Scan a TypeScript/TSX file or directory and add to the code graph."""
     path = Path(file_path)
     if not path.exists():
@@ -173,9 +214,32 @@ def scan(file_path: str, changed: bool, verbose: bool):
         _scan_changed(path, verbose=verbose, project_id=project_id, project_prefix=prefix)
         return
 
+    # Repeat-scan detection: check if project was already scanned
+    client = Neo4jClient(project_id=project_id)
+    try:
+        project_info = client.get_project()
+        if project_info and project_info.get("last_scanned_at") and not force:
+            last_ts = project_info["last_scanned_at"]
+            click.echo(
+                f"Project already scanned (last: {last_ts}). "
+                f"Running incremental scan. Use --force for full rescan."
+            )
+            _scan_changed_since(
+                path,
+                since=last_ts,
+                verbose=verbose,
+                project_id=project_id,
+                project_prefix=prefix,
+                client=client,
+            )
+            return
+    except Exception:
+        pass
+
     try:
         ingester = _find_ingester()
     except FileNotFoundError as e:
+        client.close()
         click.echo(f"Error: {e}")
         return
 
@@ -191,7 +255,6 @@ def scan(file_path: str, changed: bool, verbose: bool):
         total_rels = 0
         start_time = time.monotonic()
 
-        client = Neo4jClient(project_id=project_id)
         try:
             for f in files:
                 scan_result, warning = _scan_single_file(f, ingester, project_prefix=prefix)
@@ -212,6 +275,7 @@ def scan(file_path: str, changed: bool, verbose: bool):
             client.close()
 
         elapsed = time.monotonic() - start_time
+        client.update_last_scanned()
         progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
     else:
         start_time = time.monotonic()
@@ -223,16 +287,17 @@ def scan(file_path: str, changed: bool, verbose: bool):
 
         if warning:
             progress.stop()
+            client.close()
             click.echo(f"Error: {warning}")
             return
 
-        client = Neo4jClient(project_id=project_id)
         try:
             client.upsert_nodes(scan_result.nodes)
             client.upsert_relationships(scan_result.relationships)
         finally:
             client.close()
 
+        client.update_last_scanned()
         progress.advance(
             str(path),
             len(scan_result.nodes),
@@ -303,4 +368,76 @@ def _scan_changed(root: Path, verbose: bool = False, project_id: str | None = No
 
     elapsed = time.monotonic() - start_time
     progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
+
+
+def _scan_changed_since(
+    root: Path,
+    since: str,
+    verbose: bool = False,
+    project_id: str | None = None,
+    project_prefix: str | None = None,
+    client: "Neo4jClient | None" = None,
+) -> None:
+    """Scan files changed since *since* timestamp and remove deleted ones."""
+    deleted = _get_deleted_files_since(root, since)
+    changed = _get_changed_files_since(root, since)
+
+    deleted_set = set(deleted)
+    to_scan = [p for p in changed if p not in deleted_set]
+
+    owns_client = client is None
+    if owns_client:
+        client = Neo4jClient(project_id=project_id)
+
+    try:
+        for rel_path in deleted:
+            client.delete_file_nodes(rel_path)
+
+        if not to_scan and not deleted:
+            click.echo("No changes since last scan.")
+            client.update_last_scanned()
+            return
+
+        if not to_scan:
+            click.echo(f"No changed TS/TSX files to scan (removed {len(deleted)} file(s)).")
+            client.update_last_scanned()
+            return
+
+        try:
+            ingester = _find_ingester()
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}")
+            return
+
+        total_nodes = 0
+        total_rels = 0
+        start_time = time.monotonic()
+        progress = ScanProgress(total=len(to_scan), verbose=verbose)
+        progress.start()
+
+        for rel_path in to_scan:
+            file_path = root / rel_path
+            if not file_path.exists():
+                continue
+            scan_result, warning = _scan_single_file(file_path, ingester, project_prefix=project_prefix)
+            if warning:
+                progress.add_warning(warning)
+            if scan_result:
+                client.delete_file_nodes(scan_result.file)
+                client.upsert_nodes(scan_result.nodes)
+                client.upsert_relationships(scan_result.relationships)
+                total_nodes += len(scan_result.nodes)
+                total_rels += len(scan_result.relationships)
+            progress.advance(
+                str(file_path),
+                len(scan_result.nodes) if scan_result else 0,
+                len(scan_result.relationships) if scan_result else 0,
+            )
+
+        elapsed = time.monotonic() - start_time
+        client.update_last_scanned()
+        progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
+    finally:
+        if owns_client:
+            client.close()
 

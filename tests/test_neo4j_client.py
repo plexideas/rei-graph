@@ -461,3 +461,74 @@ class TestNeo4jClientProjectScoping:
         params = project_calls[0][0][1]
         assert params["id"] == PROJECT_A
         assert params["hash"] == HASH_A
+
+
+class TestNeo4jClientProjectLookup:
+    """Tests for get_project and update_last_scanned methods."""
+
+    def test_get_project_returns_none_when_not_found(self):
+        """get_project returns None when no Project node exists for the id."""
+        client = _make_scoped_client(PROJECT_A)
+        _, mock_session = _mock_driver(client)
+        mock_session.run.return_value.single.return_value = None
+
+        result = client.get_project()
+
+        assert result is None
+        cypher = mock_session.run.call_args[0][0]
+        assert "Project" in cypher
+        assert mock_session.run.call_args[0][1]["id"] == PROJECT_A
+
+    def test_get_project_returns_properties_when_found(self):
+        """get_project returns a dict of project properties when the node exists."""
+        client = _make_scoped_client(PROJECT_A)
+        _, mock_session = _mock_driver(client)
+        mock_record = MagicMock()
+        mock_record.__getitem__ = MagicMock(
+            return_value={
+                "id": PROJECT_A,
+                "name": "project-a",
+                "hash": HASH_A,
+                "last_scanned_at": "2026-04-18T10:00:00+00:00",
+            }
+        )
+        mock_session.run.return_value.single.return_value = mock_record
+
+        result = client.get_project()
+
+        assert result is not None
+        assert result["id"] == PROJECT_A
+        assert result["last_scanned_at"] == "2026-04-18T10:00:00+00:00"
+
+    def test_get_project_returns_none_without_project_id(self):
+        """get_project returns None when client has no project_id."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+        _, mock_session = _mock_driver(client)
+
+        result = client.get_project()
+
+        assert result is None
+        mock_session.run.assert_not_called()
+
+    def test_update_last_scanned_sets_timestamp(self):
+        """update_last_scanned sets last_scanned_at on the Project node."""
+        client = _make_scoped_client(PROJECT_A)
+        _, mock_session = _mock_driver(client)
+
+        client.update_last_scanned()
+
+        cypher, params = mock_session.run.call_args[0]
+        assert "last_scanned_at" in cypher
+        assert "Project" in cypher
+        assert params["id"] == PROJECT_A
+        # Timestamp should be an ISO-format string
+        assert "T" in params["last_scanned_at"]
+
+    def test_update_last_scanned_noop_without_project_id(self):
+        """update_last_scanned is a no-op when client has no project_id."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+        _, mock_session = _mock_driver(client)
+
+        client.update_last_scanned()
+
+        mock_session.run.assert_not_called()

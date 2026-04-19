@@ -233,3 +233,33 @@ class Neo4jClient:
                 result = session.run("MATCH (n) RETURN count(n) AS count")
             record = result.single()
             return record["count"] if record else 0
+
+    def get_project(self) -> dict | None:
+        """Look up the Project registry node for the current project_id.
+
+        Returns a dict of project properties, or None if not found / no project_id.
+        """
+        if not self.project_id:
+            return None
+        with self._driver.session() as session:
+            result = session.run(
+                "MATCH (p:Project {id: $id}) RETURN p",
+                {"id": self.project_id},
+            )
+            record = result.single()
+            if record is None:
+                return None
+            return dict(record["p"])
+
+    def update_last_scanned(self) -> None:
+        """Set last_scanned_at on the Project node to the current UTC time."""
+        if not self.project_id:
+            return
+        with self._driver.session() as session:
+            session.run(
+                "MATCH (p:Project {id: $id}) SET p.last_scanned_at = $last_scanned_at",
+                {
+                    "id": self.project_id,
+                    "last_scanned_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
