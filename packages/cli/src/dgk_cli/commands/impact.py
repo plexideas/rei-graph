@@ -1,6 +1,18 @@
+from pathlib import Path
+
 import click
 
+from dgk_core.config import read_config
 from dgk_storage.neo4j_client import Neo4jClient
+
+
+def _resolve_project_id() -> str | None:
+    """Read project_id from .dgk/project.toml in cwd, or return None."""
+    config_path = Path.cwd() / ".dgk" / "project.toml"
+    if config_path.exists():
+        config = read_config(config_path)
+        return config.get("project", {}).get("id")
+    return None
 
 
 @click.command()
@@ -8,7 +20,8 @@ from dgk_storage.neo4j_client import Neo4jClient
 @click.option("--depth", default=5, help="Max traversal depth for transitive dependents")
 def impact(file_path: str, depth: int):
     """Show what depends on a file (impact analysis)."""
-    client = Neo4jClient()
+    project_id = _resolve_project_id()
+    client = Neo4jClient(project_id=project_id)
     try:
         results = client.get_dependents(file_path, max_depth=depth)
     finally:

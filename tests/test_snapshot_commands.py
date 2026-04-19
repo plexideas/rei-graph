@@ -34,3 +34,36 @@ def test_snapshot_uses_default_dir_when_not_specified():
     args, kwargs = mock_client.save_snapshot.call_args
     snapshot_dir = args[0]
     assert "dev-graph-kit" in str(snapshot_dir) or str(snapshot_dir).startswith("/")
+
+
+# ── Phase 5: project scoping tests ──
+
+
+def test_snapshot_resolves_project_id_and_scopes_client():
+    """dgk snapshot reads .dgk/project.toml and constructs SnapshotClient with project_id."""
+    with patch("dgk_cli.commands.snapshot.SnapshotClient") as mock_client_cls, \
+         patch("dgk_cli.commands.snapshot._resolve_project_id", return_value="/home/user/myproject"):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.save_snapshot.return_value = "/some/path/snap.json"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["snapshot"])
+
+        assert result.exit_code == 0
+        mock_client_cls.assert_called_once_with(project_id="/home/user/myproject")
+
+
+def test_snapshot_works_without_project_toml():
+    """dgk snapshot without .dgk/project.toml constructs SnapshotClient with project_id=None."""
+    with patch("dgk_cli.commands.snapshot.SnapshotClient") as mock_client_cls, \
+         patch("dgk_cli.commands.snapshot._resolve_project_id", return_value=None):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.save_snapshot.return_value = "/some/path/snap.json"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["snapshot"])
+
+        assert result.exit_code == 0
+        mock_client_cls.assert_called_once_with(project_id=None)

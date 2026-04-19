@@ -16,8 +16,10 @@ class SnapshotClient:
         uri: str = "bolt://localhost:7687",
         user: str = "neo4j",
         password: str = "devgraphkit",
+        project_id: str | None = None,
     ):
         self._driver = GraphDatabase.driver(uri, auth=(user, password))
+        self._project_id = project_id
 
     def close(self) -> None:
         self._driver.close()
@@ -26,14 +28,30 @@ class SnapshotClient:
         return datetime.now(timezone.utc).isoformat()
 
     def export_graph(self) -> dict:
-        """Export all nodes and relationships from Neo4j as a dict."""
+        """Export nodes and relationships from Neo4j as a dict.
+
+        When project_id is set, only nodes/rels for that project are returned.
+        """
         with self._driver.session() as session:
-            nodes_result = session.run("MATCH (n) RETURN n")
+            if self._project_id:
+                nodes_result = session.run(
+                    "MATCH (n) WHERE n.project_id = $project_id RETURN n",
+                    project_id=self._project_id,
+                )
+            else:
+                nodes_result = session.run("MATCH (n) RETURN n")
             nodes = [dict(record["n"]) for record in nodes_result]
 
-            rels_result = session.run(
-                "MATCH (a)-[r]->(b) RETURN a.id AS source, type(r) AS type, b.id AS target, properties(r) AS props"
-            )
+            if self._project_id:
+                rels_result = session.run(
+                    "MATCH (a)-[r]->(b) WHERE a.project_id = $project_id AND b.project_id = $project_id "
+                    "RETURN a.id AS source, type(r) AS type, b.id AS target, properties(r) AS props",
+                    project_id=self._project_id,
+                )
+            else:
+                rels_result = session.run(
+                    "MATCH (a)-[r]->(b) RETURN a.id AS source, type(r) AS type, b.id AS target, properties(r) AS props"
+                )
             relationships = [
                 {
                     "source": record["source"],
@@ -46,19 +64,21 @@ class SnapshotClient:
 
         return {"nodes": nodes, "relationships": relationships}
 
-    def save_snapshot(self, snapshot_dir: Path, project_id: str = "default") -> str:
+    def save_snapshot(self, snapshot_dir: Path, project_id: str | None = None) -> str:
         """Export graph and save to disk. Returns the snapshot file path."""
+        dir_label = project_id or "default"
+        meta_project_id = self._project_id or project_id or "default"
         data = self.export_graph()
         snapshot_id = f"snapshot:{uuid.uuid4().hex[:12]}"
         data["meta"] = {
             "id": snapshot_id,
             "timestamp": self._now(),
-            "project_id": project_id,
+            "project_id": meta_project_id,
             "node_count": len(data["nodes"]),
             "relationship_count": len(data["relationships"]),
         }
 
-        dest_dir = snapshot_dir / project_id / "snapshots"
+        dest_dir = snapshot_dir / dir_label / "snapshots"
         dest_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{snapshot_id}.json"
         dest_path = dest_dir / filename

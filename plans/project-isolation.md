@@ -112,14 +112,14 @@ Update `SnapshotClient` to accept `project_id` at construction. `export_graph()`
 
 ### Acceptance criteria
 
-- [ ] `SnapshotClient(project_id=...)` stores and uses `project_id`
-- [ ] `export_graph()` only returns nodes/relationships for the scoped project
-- [ ] Snapshot JSON metadata includes `project_id`
-- [ ] `dgk query` resolves project and constructs scoped `Neo4jClient` — results only from current project
-- [ ] `dgk impact` resolves project and constructs scoped `Neo4jClient` — dependents only from current project
-- [ ] `dgk snapshot` resolves project and constructs scoped `SnapshotClient`
-- [ ] Tests: snapshot export with two projects in DB only returns scoped data; query/impact return scoped results
-- [ ] All existing tests pass
+- [x] `SnapshotClient(project_id=...)` stores and uses `project_id`
+- [x] `export_graph()` only returns nodes/relationships for the scoped project
+- [x] Snapshot JSON metadata includes `project_id`
+- [x] `dgk query` resolves project and constructs scoped `Neo4jClient` — results only from current project
+- [x] `dgk impact` resolves project and constructs scoped `Neo4jClient` — dependents only from current project
+- [x] `dgk snapshot` resolves project and constructs scoped `SnapshotClient`
+- [x] Tests: snapshot export with two projects in DB only returns scoped data; query/impact return scoped results
+- [x] All existing tests pass
 
 ---
 

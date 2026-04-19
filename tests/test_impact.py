@@ -59,3 +59,36 @@ def test_impact_shows_transitive_dependents():
         assert result.exit_code == 0
         assert "login" in result.output
         assert "app" in result.output
+
+
+# ── Phase 5: project scoping tests ──
+
+
+def test_impact_resolves_project_id_from_toml(tmp_path):
+    """dgk impact reads .dgk/project.toml and constructs Neo4jClient with project_id."""
+    with patch("dgk_cli.commands.impact.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.impact._resolve_project_id", return_value=str(tmp_path)):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_dependents.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["impact", "src/auth.ts"])
+
+        assert result.exit_code == 0
+        mock_client_cls.assert_called_once_with(project_id=str(tmp_path))
+
+
+def test_impact_works_without_project_toml():
+    """dgk impact without .dgk/project.toml constructs Neo4jClient with project_id=None."""
+    with patch("dgk_cli.commands.impact.Neo4jClient") as mock_client_cls, \
+         patch("dgk_cli.commands.impact._resolve_project_id", return_value=None):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_dependents.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["impact", "src/auth.ts"])
+
+        assert result.exit_code == 0
+        mock_client_cls.assert_called_once_with(project_id=None)
