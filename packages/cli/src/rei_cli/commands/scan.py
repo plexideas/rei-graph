@@ -468,11 +468,11 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
                     len(scan_result.nodes) if scan_result else 0,
                     len(scan_result.relationships) if scan_result else 0,
                 )
+            elapsed = time.monotonic() - start_time
+            client.update_last_scanned()
         finally:
             client.close()
 
-        elapsed = time.monotonic() - start_time
-        client.update_last_scanned()
         progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
         if is_first_scan:
             _print_next_steps()
@@ -494,10 +494,10 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
         try:
             client.upsert_nodes(scan_result.nodes)
             client.upsert_relationships(scan_result.relationships)
+            client.update_last_scanned()
         finally:
             client.close()
 
-        client.update_last_scanned()
         progress.advance(
             str(path),
             len(scan_result.nodes),

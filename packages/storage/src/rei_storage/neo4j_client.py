@@ -29,7 +29,11 @@ class Neo4jClient:
         password: str = "reigraph",
         project_id: str | None = None,
     ):
-        self._driver = GraphDatabase.driver(uri, auth=(user, password))
+        self._driver = GraphDatabase.driver(
+            uri,
+            auth=(user, password),
+            notifications_min_severity="OFF",
+        )
         self.project_id = project_id
         self.project_hash = _project_hash(project_id) if project_id else None
 
