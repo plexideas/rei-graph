@@ -56,14 +56,14 @@ jobs:
             dist/*.whl dist/*.tar.gz
 
       # ── Homebrew tap update ───────────────────────────────────────────────
-      - name: Compute source tarball SHA256
+      - name: Compute wheel SHA256
         id: tarball
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          URL="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
-          curl -fsSL "$URL" -o /tmp/rei-graph-source.tar.gz
-          echo "sha256=$(sha256sum /tmp/rei-graph-source.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          VERSION="${{ steps.version.outputs.version }}"
+          WHEEL_FILE=$(ls dist/rei_cli-${VERSION}-*.whl | head -1)
+          WHEEL_NAME=$(basename "${WHEEL_FILE}")
+          echo "sha256=$(sha256sum ${WHEEL_FILE} | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "url=https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/${WHEEL_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Update Homebrew tap formula
         env:
