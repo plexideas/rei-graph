@@ -7,13 +7,13 @@ from mcp.server import Server
 from mcp.types import Resource, TextContent, Tool
 from pydantic import AnyUrl
 
-from dgk_core.schemas import GraphNode, GraphRelationship
-from dgk_storage.neo4j_client import Neo4jClient, check_neo4j_health
-from dgk_storage.memory_client import MemoryClient
-from dgk_storage.dag_client import DagClient
-from dgk_storage.snapshot_client import SnapshotClient
+from rei_core.schemas import GraphNode, GraphRelationship
+from rei_storage.neo4j_client import Neo4jClient, check_neo4j_health
+from rei_storage.memory_client import MemoryClient
+from rei_storage.dag_client import DagClient
+from rei_storage.snapshot_client import SnapshotClient
 
-server = Server("dev-graph-kit")
+server = Server("rei-graph")
 
 
 # ─── Per-project client cache ──────────────────────────────────────────────────
@@ -126,28 +126,28 @@ def upsert_relations(arguments: dict, client: Neo4jClient) -> dict:
 
 
 def scan_project(arguments: dict) -> dict:
-    """scan.project: trigger full project scan via dgk scan."""
+    """scan.project: trigger full project scan via rei scan."""
     path = arguments.get("path", ".")
-    result = subprocess.run(["dgk", "scan", path], capture_output=True, text=True)
+    result = subprocess.run(["rei", "scan", path], capture_output=True, text=True)
     status = "ok" if result.returncode == 0 else "error"
     return {"status": status, "output": result.stdout.strip()}
 
 
 def scan_file(arguments: dict) -> dict:
-    """scan.file: trigger single-file scan via dgk scan."""
+    """scan.file: trigger single-file scan via rei scan."""
     path = arguments.get("path", "")
-    result = subprocess.run(["dgk", "scan", path], capture_output=True, text=True)
+    result = subprocess.run(["rei", "scan", path], capture_output=True, text=True)
     status = "ok" if result.returncode == 0 else "error"
     return {"status": status, "output": result.stdout.strip()}
 
 
 def scan_changed_files(arguments: dict) -> dict:
-    """scan.changed_files: incrementally scan git-changed files via dgk scan --changed."""
+    """scan.changed_files: incrementally scan git-changed files via rei scan --changed."""
     from pathlib import Path
 
     path = arguments.get("path", ".")
     result = subprocess.run(
-        ["dgk", "scan", path, "--changed"], capture_output=True, text=True
+        ["rei", "scan", path, "--changed"], capture_output=True, text=True
     )
     status = "ok" if result.returncode == 0 else "error"
     return {"status": status, "output": result.stdout.strip()}
@@ -160,7 +160,7 @@ def project_snapshot(arguments: dict) -> dict:
     snapshot_dir = arguments.get("snapshot_dir")
     project_id = arguments.get("project_id")
     if snapshot_dir is None:
-        snapshot_dir = Path.home() / ".dev-graph-kit" / "snapshots"
+        snapshot_dir = Path.home() / ".rei-graph" / "snapshots"
     else:
         snapshot_dir = Path(snapshot_dir)
 
@@ -199,7 +199,7 @@ def get_schema() -> str:
 def get_summary(client: Neo4jClient) -> str:
     """project://summary: project overview and stats."""
     count = client.count_nodes()
-    return f"dev-graph-kit graph: {count} node(s) indexed."
+    return f"rei-graph graph: {count} node(s) indexed."
 
 
 # ─── Memory helpers (testable) ────────────────────────────────────────────────

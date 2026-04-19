@@ -3,13 +3,13 @@ from pathlib import Path
 
 import click
 
-from dgk_storage.neo4j_client import Neo4jClient
+from rei_storage.neo4j_client import Neo4jClient
 
 
 @click.command("delete-project")
 @click.argument("path", default=".", type=click.Path(exists=True, file_okay=False))
 def delete_project(path: str):
-    """Delete all graph data for a project and remove its .dgk/ directory.
+    """Delete all graph data for a project and remove its .rei/ directory.
 
     PATH is the root directory of the project to delete. Defaults to the
     current directory.
@@ -29,8 +29,8 @@ def delete_project(path: str):
     finally:
         client.close()
 
-    dgk_dir = project_root / ".dgk"
-    if dgk_dir.exists():
-        shutil.rmtree(dgk_dir)
+    rei_dir = project_root / ".rei"
+    if rei_dir.exists():
+        shutil.rmtree(rei_dir)
 
     click.echo(f"Deleted project data for {project_id}.")

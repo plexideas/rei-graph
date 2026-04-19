@@ -1,6 +1,6 @@
 import hashlib
 
-from dgk_core.hashing import project_hash
+from rei_core.hashing import project_hash
 
 
 class TestProjectHash:

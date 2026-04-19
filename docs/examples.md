@@ -1,13 +1,13 @@
 # Examples
 
-Step-by-step examples of using dev-graph-kit with the demo projects.
+Step-by-step examples of using rei-graph with the demo projects.
 
 ## Prerequisites
 
 Services running:
 ```bash
 docker compose up -d      # Neo4j
-uv run dgk doctor          # Verify all healthy
+uv run rei doctor          # Verify all healthy
 ```
 
 ---
@@ -17,7 +17,7 @@ uv run dgk doctor          # Verify all healthy
 ### Step 1: Scan the project
 
 ```bash
-uv run dgk scan examples/react_ts_app
+uv run rei scan examples/react_ts_app
 ```
 
 Output:
@@ -29,7 +29,7 @@ Done: 14 nodes, 18 relationships from 5 files
 ### Step 2: Query the graph
 
 ```bash
-uv run dgk query "useAuth"
+uv run rei query "useAuth"
 ```
 
 Output:
@@ -38,7 +38,7 @@ hook:src/hooks.ts:useAuth  (Hook)  hooks.ts:7
 ```
 
 ```bash
-uv run dgk query "LoginForm"
+uv run rei query "LoginForm"
 ```
 
 Output:
@@ -49,7 +49,7 @@ component:src/components.tsx:LoginForm  (Component)  components.tsx:11
 ### Step 3: Run impact analysis
 
 ```bash
-uv run dgk impact examples/react_ts_app/src/hooks.ts
+uv run rei impact examples/react_ts_app/src/hooks.ts
 ```
 
 Output:
@@ -67,12 +67,12 @@ Impact analysis for: examples/react_ts_app/src/hooks.ts
 ### Step 4: Snapshot the graph
 
 ```bash
-uv run dgk snapshot --project-id react-demo
+uv run rei snapshot --project-id react-demo
 ```
 
 Output:
 ```
-Snapshot saved: ~/.dev-graph-kit/snapshots/react-demo/snapshots/snap_20260418T100000Z.json
+Snapshot saved: ~/.rei-graph/snapshots/react-demo/snapshots/snap_20260418T100000Z.json
 ```
 
 ---
@@ -80,7 +80,7 @@ Snapshot saved: ~/.dev-graph-kit/snapshots/react-demo/snapshots/snap_20260418T10
 ## Example 2: Scan express_api
 
 ```bash
-uv run dgk scan examples/express_api
+uv run rei scan examples/express_api
 ```
 
 Output:
@@ -91,7 +91,7 @@ Done: 18 nodes, 22 relationships from 4 files
 
 Query the API routes:
 ```bash
-uv run dgk query "userRouter"
+uv run rei query "userRouter"
 ```
 
 ---
@@ -104,7 +104,7 @@ echo "// a new comment" >> examples/react_ts_app/src/utils.ts
 git add -A
 
 # Scan only changed files
-uv run dgk scan examples/react_ts_app --changed
+uv run rei scan examples/react_ts_app --changed
 ```
 
 Output:
@@ -120,7 +120,7 @@ Done: 3 nodes, 2 relationships from 1 changed files
 Start the MCP server (Claude Code manages this via config, but you can test manually):
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}' | uv run dgk mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}' | uv run rei mcp
 ```
 
 ### Agent session example
@@ -177,12 +177,12 @@ memory.record_change({
 
 ```bash
 # Start MCP server manually to test
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"memory.record_decision","arguments":{"context":"auth","choice":"use JWT","rationale":"stateless sessions"}}}' | uv run dgk mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"memory.record_decision","arguments":{"context":"auth","choice":"use JWT","rationale":"stateless sessions"}}}' | uv run rei mcp
 ```
 
 Retrieve in next session:
 ```bash
-echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory.get_recent_context","arguments":{"query":"auth","limit":5}}}' | uv run dgk mcp
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory.get_recent_context","arguments":{"query":"auth","limit":5}}}' | uv run rei mcp
 ```
 
 ---
@@ -191,10 +191,10 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory.get
 
 ```bash
 # Create a plan
-uv run dgk plan "Add user profile page"
+uv run rei plan "Add user profile page"
 
 # List open plans
-uv run dgk plans
+uv run rei plans
 ```
 
 Output:

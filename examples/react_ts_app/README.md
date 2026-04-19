@@ -1,6 +1,6 @@
 # react-ts-app
 
-Demo React/TypeScript application used as a scan target for dev-graph-kit.
+Demo React/TypeScript application used as a scan target for rei-graph.
 
 ## Structure
 
@@ -15,7 +15,7 @@ src/
 
 ## Graph coverage
 
-Running `dgk scan .` from this directory extracts:
+Running `rei scan .` from this directory extracts:
 
 - **Module** nodes for each file
 - **Component** nodes: `App`, `NavBar`, `LoginForm`, `UserProfile`
@@ -29,8 +29,8 @@ Running `dgk scan .` from this directory extracts:
 
 ```bash
 # From repo root
-dgk scan examples/react_ts_app
+rei scan examples/react_ts_app
 
 # Or from this directory
-dgk scan .
+rei scan .
 ```

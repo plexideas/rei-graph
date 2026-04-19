@@ -5,11 +5,11 @@ from pathlib import Path
 
 import click
 
-from dgk_core.config import generate_default_config, read_config, write_config
-from dgk_core.hashing import project_hash
-from dgk_core.schemas import GraphNode, GraphRelationship, ScanResult
-from dgk_storage.neo4j_client import Neo4jClient
-from dgk_cli.progress import ScanProgress
+from rei_core.config import generate_default_config, read_config, write_config
+from rei_core.hashing import project_hash
+from rei_core.schemas import GraphNode, GraphRelationship, ScanResult
+from rei_storage.neo4j_client import Neo4jClient
+from rei_cli.progress import ScanProgress
 
 TS_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx"}
 
@@ -35,12 +35,12 @@ def _find_ingester() -> Path:
 
 
 def _resolve_project(root: Path) -> str:
-    """Resolve project identity for *root*, auto-creating .dgk/project.toml if needed.
+    """Resolve project identity for *root*, auto-creating .rei/project.toml if needed.
 
     Returns the canonical absolute path (project_id).
     """
     project_id = str(root.resolve())
-    config_path = root / ".dgk" / "project.toml"
+    config_path = root / ".rei" / "project.toml"
     if not config_path.exists():
         project_name = root.resolve().name
         config = generate_default_config(project_name, project_id=project_id)
@@ -75,8 +75,8 @@ def _parse_ingester_output(raw: str) -> ScanResult:
 
 
 def _collect_files(root: Path) -> list[Path]:
-    """Walk project tree respecting include/exclude from .dgk/project.toml."""
-    config_path = root / ".dgk" / "project.toml"
+    """Walk project tree respecting include/exclude from .rei/project.toml."""
+    config_path = root / ".rei" / "project.toml"
     include = ["src", "packages", "apps"]
     exclude = ["dist", "build", "node_modules", ".next"]
 
@@ -205,7 +205,7 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
         click.echo(f"Error: file not found — {file_path}")
         return
 
-    # Resolve project identity (auto-init .dgk/project.toml if missing)
+    # Resolve project identity (auto-init .rei/project.toml if missing)
     project_root = path if path.is_dir() else path.parent
     project_id = _resolve_project(project_root)
     prefix = project_hash(project_id)

@@ -3,15 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dgk-mcp"
+name = "rei-mcp"
 version = "0.1.0"
-description = "MCP server for dev-graph-kit"
+description = "MCP server for rei-graph"
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.0", "dgk-core", "dgk-storage"]
+dependencies = ["mcp>=1.0", "rei-core", "rei-storage"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/dgk_mcp"]
+packages = ["src/rei_mcp"]
 
 [tool.uv.sources]
-dgk-core = { workspace = true }
-dgk-storage = { workspace = true }
+rei-core = { workspace = true }
+rei-storage = { workspace = true }

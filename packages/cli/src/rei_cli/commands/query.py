@@ -2,13 +2,13 @@ from pathlib import Path
 
 import click
 
-from dgk_core.config import read_config
-from dgk_storage.neo4j_client import Neo4jClient
+from rei_core.config import read_config
+from rei_storage.neo4j_client import Neo4jClient
 
 
 def _resolve_project_id() -> str | None:
-    """Read project_id from .dgk/project.toml in cwd, or return None."""
-    config_path = Path.cwd() / ".dgk" / "project.toml"
+    """Read project_id from .rei/project.toml in cwd, or return None."""
+    config_path = Path.cwd() / ".rei" / "project.toml"
     if config_path.exists():
         config = read_config(config_path)
         return config.get("project", {}).get("id")

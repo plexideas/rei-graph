@@ -2,7 +2,7 @@
     "name": "react-ts-app",
     "version": "1.0.0",
     "private": true,
-    "description": "Demo React/TypeScript app — dev-graph-kit scan target",
+    "description": "Demo React/TypeScript app — rei-graph scan target",
     "scripts": {
         "typecheck": "tsc --noEmit"
     },

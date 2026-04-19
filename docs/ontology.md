@@ -1,6 +1,6 @@
 # Graph Ontology
 
-Node labels and relationship types stored in Neo4j by dev-graph-kit.
+Node labels and relationship types stored in Neo4j by rei-graph.
 
 ## Code Nodes
 

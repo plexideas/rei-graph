@@ -1,4 +1,4 @@
-"""dgk mcp — start the Model Context Protocol server."""
+"""rei mcp — start the Model Context Protocol server."""
 import subprocess
 import sys
 
@@ -14,7 +14,7 @@ import click
     help="Transport protocol (currently only stdio is supported).",
 )
 def mcp_command(transport: str) -> None:
-    """Start the dev-graph-kit MCP server.
+    """Start the rei-graph MCP server.
 
     The server exposes the code-graph tools and resources to any
     MCP-compatible AI assistant (e.g. Claude Desktop, VS Code Copilot).
@@ -23,16 +23,16 @@ def mcp_command(transport: str) -> None:
     Example VS Code mcp.json entry:
         {
           "servers": {
-            "dev-graph-kit": {
+            "rei-graph": {
               "type": "stdio",
-              "command": "dgk",
+              "command": "rei",
               "args": ["mcp"]
             }
           }
         }
     """
     result = subprocess.run(
-        [sys.executable, "-m", "dgk_mcp"],
+        [sys.executable, "-m", "rei_mcp"],
         check=False,
     )
     raise SystemExit(result.returncode)

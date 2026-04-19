@@ -3,7 +3,7 @@ import asyncio
 
 from mcp.server.stdio import stdio_server
 
-from dgk_mcp.server import server
+from rei_mcp.server import server
 
 
 async def main() -> None:

@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dgk-storage"
+name = "rei-storage"
 version = "0.1.0"
-description = "Storage layer for dev-graph-kit"
+description = "Storage layer for rei-graph"
 requires-python = ">=3.11"
-dependencies = ["neo4j>=5.0", "dgk-core"]
+dependencies = ["neo4j>=5.0", "rei-core"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/dgk_storage"]
+packages = ["src/rei_storage"]
 
 [tool.uv.sources]
-dgk-core = { workspace = true }
+rei-core = { workspace = true }

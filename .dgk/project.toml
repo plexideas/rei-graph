@@ -1,0 +1,27 @@
+[project]
+name = "agent-platform"
+language = "typescript"
+root = "."
+
+[scan]
+include = [
+    "src",
+    "packages",
+    "apps",
+]
+exclude = [
+    "dist",
+    "build",
+    "node_modules",
+    ".next",
+]
+
+[memory]
+enabled = true
+scope = "project"
+
+[dag]
+engine = "dagster"
+
+[graph]
+backend = "neo4j"

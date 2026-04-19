@@ -2,13 +2,13 @@ import click
 
 from pathlib import Path
 
-from dgk_core.config import read_config
-from dgk_storage.dag_client import DagClient
+from rei_core.config import read_config
+from rei_storage.dag_client import DagClient
 
 
 def _resolve_project_id() -> str | None:
-    """Read project_id from .dgk/project.toml in cwd, or return None."""
-    config_path = Path.cwd() / ".dgk" / "project.toml"
+    """Read project_id from .rei/project.toml in cwd, or return None."""
+    config_path = Path.cwd() / ".rei" / "project.toml"
     if config_path.exists():
         config = read_config(config_path)
         return config.get("project", {}).get("id")
@@ -19,7 +19,7 @@ def _resolve_project_id() -> str | None:
 @click.argument("goal")
 @click.argument("steps", nargs=-1, required=True)
 def plan(goal: str, steps: tuple[str, ...]):
-    """Create a new execution plan: dgk plan <goal> <step1> [step2 ...]"""
+    """Create a new execution plan: rei plan <goal> <step1> [step2 ...]"""
     project_id = _resolve_project_id()
     dag = DagClient(project_id=project_id)
     try:

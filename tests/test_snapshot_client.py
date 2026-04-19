@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 
 def _make_client_with_export(nodes, rels):
     """Helper: create a SnapshotClient with mocked Neo4j returning given data."""
-    from dgk_storage.snapshot_client import SnapshotClient
+    from rei_storage.snapshot_client import SnapshotClient
 
     mock_session = MagicMock()
     mock_nodes_result = MagicMock()
@@ -12,7 +12,7 @@ def _make_client_with_export(nodes, rels):
     mock_rels_result.__iter__ = MagicMock(return_value=iter(rels))
     mock_session.run.side_effect = [mock_nodes_result, mock_rels_result]
 
-    with patch("dgk_storage.snapshot_client.GraphDatabase") as mock_gdb:
+    with patch("rei_storage.snapshot_client.GraphDatabase") as mock_gdb:
         mock_driver = MagicMock()
         mock_gdb.driver.return_value = mock_driver
         mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
@@ -24,7 +24,7 @@ def _make_client_with_export(nodes, rels):
 
 def test_export_graph_returns_nodes_and_relationships():
     """SnapshotClient.export_graph returns all nodes and relationships from Neo4j."""
-    from dgk_storage.snapshot_client import SnapshotClient
+    from rei_storage.snapshot_client import SnapshotClient
 
     mock_session = MagicMock()
     mock_nodes_result = MagicMock()
@@ -38,7 +38,7 @@ def test_export_graph_returns_nodes_and_relationships():
     ]))
     mock_session.run.side_effect = [mock_nodes_result, mock_rels_result]
 
-    with patch("dgk_storage.snapshot_client.GraphDatabase") as mock_gdb:
+    with patch("rei_storage.snapshot_client.GraphDatabase") as mock_gdb:
         mock_driver = MagicMock()
         mock_gdb.driver.return_value = mock_driver
         mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
@@ -56,7 +56,7 @@ def test_export_graph_returns_nodes_and_relationships():
 def test_save_snapshot_writes_json_file(tmp_path):
     """SnapshotClient.save_snapshot writes a .json file under <dir>/<project>/snapshots/."""
     import json
-    from dgk_storage.snapshot_client import SnapshotClient
+    from rei_storage.snapshot_client import SnapshotClient
 
     mock_session = MagicMock()
     mock_nodes_result = MagicMock()
@@ -67,7 +67,7 @@ def test_save_snapshot_writes_json_file(tmp_path):
     mock_rels_result.__iter__ = MagicMock(return_value=iter([]))
     mock_session.run.side_effect = [mock_nodes_result, mock_rels_result]
 
-    with patch("dgk_storage.snapshot_client.GraphDatabase") as mock_gdb:
+    with patch("rei_storage.snapshot_client.GraphDatabase") as mock_gdb:
         mock_driver = MagicMock()
         mock_gdb.driver.return_value = mock_driver
         mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
@@ -122,9 +122,9 @@ class TestSnapshotClientProjectScoping:
         # Build a mock that returns all nodes/rels — the client should filter
         client_a, mock_session = _make_client_with_export(all_nodes, rels_a + rels_b)
         # Reconstruct with project_id
-        from dgk_storage.snapshot_client import SnapshotClient
+        from rei_storage.snapshot_client import SnapshotClient
 
-        with patch("dgk_storage.snapshot_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.snapshot_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_gdb.driver.return_value = mock_driver
             client_a = SnapshotClient(project_id="/home/user/projectA")
@@ -171,11 +171,11 @@ class TestSnapshotClientProjectScoping:
     def test_save_snapshot_metadata_includes_project_id(self, tmp_path):
         """save_snapshot() includes project_id in metadata when set."""
         import json
-        from dgk_storage.snapshot_client import SnapshotClient
+        from rei_storage.snapshot_client import SnapshotClient
 
         nodes = [{"id": "module:abc123:src/foo.ts", "name": "foo", "project_id": "/home/user/projectA"}]
 
-        with patch("dgk_storage.snapshot_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.snapshot_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_gdb.driver.return_value = mock_driver
             client = SnapshotClient(project_id="/home/user/projectA")

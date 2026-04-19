@@ -1,4 +1,4 @@
-# PRD: dev-graph-kit
+# PRD: rei-graph
 
 **Version:** 1.1  
 **Date:** April 17, 2026  
@@ -13,7 +13,7 @@
 
 Not "another graph DB" — a **local-first developer memory/orchestration kit for coding agents**.
 
-**Product name:** `dev-graph-kit`
+**Product name:** `rei-graph`
 
 **One-line description:**
 > "Open-source local graph memory + DAG execution layer for coding agents."
@@ -88,7 +88,7 @@ Current limitations:
 | Backend | Python (uv) | Graphiti/Dagster ecosystem |
 | Code Scanner | TypeScript (ts-morph) | Native AST access for TS/TSX |
 | Agent Interface | MCP Server | Standard protocol for all agents |
-| CLI | Python (Click/Typer) | `dgk` commands |
+| CLI | Python (Click/Typer) | `rei` commands |
 
 **Why Python for core?**
 - Graphiti is Python-native/open-source
@@ -108,7 +108,7 @@ Current limitations:
 ### 3.3 Project Structure
 
 ```
-dev-graph-kit/
+rei-graph/
 ├── README.md
 ├── LICENSE
 ├── .env.example
@@ -187,7 +187,7 @@ dev-graph-kit/
 ### 3.5 Local Data Storage
 
 ```
-~/.dev-graph-kit/
+~/.rei-graph/
 ├── config.toml                 # Global CLI config
 └── projects/
     └── <project-id>/
@@ -199,7 +199,7 @@ dev-graph-kit/
 ### 3.6 Project Configuration
 
 ```toml
-# .dgk/project.toml
+# .rei/project.toml
 [project]
 name = "my-app"
 language = "typescript"
@@ -576,43 +576,43 @@ This simplifies agent access to "ready context" beyond just tool calls.
 
 | Command | Description |
 |---------|-------------|
-| `dgk init` | Initialize project, create config, check dependencies |
-| `dgk dev` | Start local stack (Neo4j, Dagster, MCP server) |
-| `dgk scan [path]` | Scan codebase, build/update graph |
-| `dgk scan --changed` | Incremental scan of git-changed files |
-| `dgk query "..."` | Quick graph search |
-| `dgk impact <file>` | Show impact analysis for a file |
-| `dgk plan "..."` | Create a DAG plan from description |
-| `dgk plans` | List open plans |
-| `dgk snapshot` | Create graph state snapshot |
-| `dgk doctor` | Check Neo4j/MCP/Dagster health |
+| `rei init` | Initialize project, create config, check dependencies |
+| `rei dev` | Start local stack (Neo4j, Dagster, MCP server) |
+| `rei scan [path]` | Scan codebase, build/update graph |
+| `rei scan --changed` | Incremental scan of git-changed files |
+| `rei query "..."` | Quick graph search |
+| `rei impact <file>` | Show impact analysis for a file |
+| `rei plan "..."` | Create a DAG plan from description |
+| `rei plans` | List open plans |
+| `rei snapshot` | Create graph state snapshot |
+| `rei doctor` | Check Neo4j/MCP/Dagster health |
 
 ### 8.2 Example Usage
 
 ```bash
 # Initialize a project
-dgk init
+rei init
 
 # Start development environment
-dgk dev
+rei dev
 
 # Scan the project
-dgk scan .
-dgk scan --changed
+rei scan .
+rei scan --changed
 
 # Query the graph
-dgk query "auth module"
+rei query "auth module"
 
 # Analyze impact
-dgk impact src/features/auth/LoginForm.tsx
+rei impact src/features/auth/LoginForm.tsx
 
 # Create and manage plans
-dgk plan "extract auth shared logic"
-dgk plans
+rei plan "extract auth shared logic"
+rei plans
 
 # Maintenance
-dgk snapshot
-dgk doctor
+rei snapshot
+rei doctor
 ```
 
 ---
@@ -623,8 +623,8 @@ dgk doctor
 
 ```bash
 # 1. Clone and setup
-git clone https://github.com/org/dev-graph-kit.git
-cd dev-graph-kit
+git clone https://github.com/org/rei-graph.git
+cd rei-graph
 cp .env.example .env
 
 # 2. Start services
@@ -635,10 +635,10 @@ uv sync                     # Python packages
 pnpm install                # TypeScript packages (optional, for ingester)
 
 # 4. Initialize
-uv run dgk init
+uv run rei init
 
 # 5. Start development
-uv run dgk dev
+uv run rei dev
 ```
 
 **Result:**
@@ -650,13 +650,13 @@ uv run dgk dev
 
 ```bash
 # Scan the project
-uv run dgk scan .
+uv run rei scan .
 
 # Create a plan
-uv run dgk plan "refactor auth flow"
+uv run rei plan "refactor auth flow"
 
 # Check status
-uv run dgk status
+uv run rei status
 ```
 
 Meanwhile, the agent can call MCP tools to read/write the graph.
@@ -892,13 +892,13 @@ README must answer three questions immediately:
 ### How to start?
 
 ```bash
-git clone https://github.com/org/dev-graph-kit.git
-cd dev-graph-kit
+git clone https://github.com/org/rei-graph.git
+cd rei-graph
 cp .env.example .env
 docker compose up -d
 uv sync
-uv run dgk init
-uv run dgk dev
+uv run rei init
+uv run rei dev
 ```
 
 **Plus:** GIF/screenshot showing:
@@ -991,9 +991,9 @@ SCAN_EXTENSIONS=.ts,.tsx,.js,.jsx
 ```json
 {
   "mcpServers": {
-    "dev-graph-kit": {
+    "rei-graph": {
       "command": "uv",
-      "args": ["run", "dgk", "mcp"],
+      "args": ["run", "rei", "mcp"],
       "env": {
         "NEO4J_URI": "bolt://localhost:7687"
       }
@@ -1048,5 +1048,5 @@ def full_scan_job():
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.1 | 2026-04-17 | Major update: renamed to dev-graph-kit, detailed ontology, MCP resources, agent lifecycle, expanded roadmap, scope constraints |
+| 1.1 | 2026-04-17 | Major update: renamed to rei-graph, detailed ontology, MCP resources, agent lifecycle, expanded roadmap, scope constraints |
 | 1.0 | 2026-04-17 | Initial PRD |

@@ -9,13 +9,13 @@ from unittest.mock import MagicMock, call, patch
 
 class TestRecordAnalysis:
     def _make_client(self):
-        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.memory_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_session = MagicMock()
             mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
             mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
             mock_gdb.driver.return_value = mock_driver
-            from dgk_storage.memory_client import MemoryClient
+            from rei_storage.memory_client import MemoryClient
             client = MemoryClient()
         return client, mock_session
 
@@ -53,13 +53,13 @@ class TestRecordAnalysis:
 
 class TestRecordDecision:
     def _make_client(self):
-        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.memory_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_session = MagicMock()
             mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
             mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
             mock_gdb.driver.return_value = mock_driver
-            from dgk_storage.memory_client import MemoryClient
+            from rei_storage.memory_client import MemoryClient
             client = MemoryClient()
         return client, mock_session
 
@@ -94,13 +94,13 @@ class TestRecordDecision:
 
 class TestRecordChange:
     def _make_client(self):
-        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.memory_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_session = MagicMock()
             mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
             mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
             mock_gdb.driver.return_value = mock_driver
-            from dgk_storage.memory_client import MemoryClient
+            from rei_storage.memory_client import MemoryClient
             client = MemoryClient()
         return client, mock_session
 
@@ -130,13 +130,13 @@ class TestRecordChange:
 
 class TestRecordValidation:
     def _make_client(self):
-        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.memory_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_session = MagicMock()
             mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
             mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
             mock_gdb.driver.return_value = mock_driver
-            from dgk_storage.memory_client import MemoryClient
+            from rei_storage.memory_client import MemoryClient
             client = MemoryClient()
         return client, mock_session
 
@@ -167,13 +167,13 @@ class TestRecordValidation:
 
 class TestRecordPlan:
     def _make_client(self):
-        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.memory_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_session = MagicMock()
             mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
             mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
             mock_gdb.driver.return_value = mock_driver
-            from dgk_storage.memory_client import MemoryClient
+            from rei_storage.memory_client import MemoryClient
             client = MemoryClient()
         return client, mock_session
 
@@ -203,14 +203,14 @@ class TestRecordPlan:
 
 class TestGetRecentContext:
     def _make_client_with_result(self, rows):
-        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.memory_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_session = MagicMock()
             mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
             mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
             mock_gdb.driver.return_value = mock_driver
             mock_session.run.return_value = rows
-            from dgk_storage.memory_client import MemoryClient
+            from rei_storage.memory_client import MemoryClient
             client = MemoryClient()
         return client, mock_session
 
@@ -241,14 +241,14 @@ class TestGetRecentContext:
 
 class TestGetRecentDecisions:
     def _make_client_with_result(self, rows):
-        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.memory_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_session = MagicMock()
             mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
             mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
             mock_gdb.driver.return_value = mock_driver
             mock_session.run.return_value = []
-            from dgk_storage.memory_client import MemoryClient
+            from rei_storage.memory_client import MemoryClient
             client = MemoryClient()
         return client, mock_session
 
@@ -270,13 +270,13 @@ class TestMemoryClientProjectScoping:
     """Verify that MemoryClient with project_id stamps nodes and filters queries."""
 
     def _make_client(self, project_id=None):
-        with patch("dgk_storage.memory_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.memory_client.GraphDatabase") as mock_gdb:
             mock_driver = MagicMock()
             mock_session = MagicMock()
             mock_driver.session.return_value.__enter__ = lambda s, *a: mock_session
             mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
             mock_gdb.driver.return_value = mock_driver
-            from dgk_storage.memory_client import MemoryClient
+            from rei_storage.memory_client import MemoryClient
             client = MemoryClient(project_id=project_id)
         return client, mock_session
 

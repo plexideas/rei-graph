@@ -2,13 +2,13 @@ from pathlib import Path
 
 import click
 
-from dgk_core.config import read_config
-from dgk_storage.snapshot_client import SnapshotClient
+from rei_core.config import read_config
+from rei_storage.snapshot_client import SnapshotClient
 
 
 def _resolve_project_id() -> str | None:
-    """Read project_id from .dgk/project.toml in cwd, or return None."""
-    config_path = Path.cwd() / ".dgk" / "project.toml"
+    """Read project_id from .rei/project.toml in cwd, or return None."""
+    config_path = Path.cwd() / ".rei" / "project.toml"
     if config_path.exists():
         config = read_config(config_path)
         return config.get("project", {}).get("id")
@@ -19,13 +19,13 @@ def _resolve_project_id() -> str | None:
 @click.option(
     "--snapshot-dir",
     default=None,
-    help="Directory to save snapshots (default: ~/.dev-graph-kit/snapshots)",
+    help="Directory to save snapshots (default: ~/.rei-graph/snapshots)",
 )
 @click.option("--project-id", default=None, help="Project identifier for snapshot naming")
 def snapshot(snapshot_dir: str | None, project_id: str | None) -> None:
     """Export the current graph state to a JSON snapshot file."""
     if snapshot_dir is None:
-        snap_dir = Path.home() / ".dev-graph-kit" / "snapshots"
+        snap_dir = Path.home() / ".rei-graph" / "snapshots"
     else:
         snap_dir = Path(snapshot_dir)
 

@@ -1,8 +1,8 @@
-# dev-graph-kit
+# rei-graph
 
 > Open-source local graph memory + DAG execution layer for coding agents.
 
-[![CI](https://github.com/org/dev-graph-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/org/dev-graph-kit/actions/workflows/ci.yml)
+[![CI](https://github.com/org/rei-graph/actions/workflows/ci.yml/badge.svg)](https://github.com/org/rei-graph/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -10,7 +10,7 @@
 
 A local-first MCP-compatible developer memory system that turns a codebase, architectural decisions, and agent work history into a queryable graph and executable plans.
 
-**dev-graph-kit gives agents:**
+**rei-graph gives agents:**
 - **Project graph** — code structure, dependencies, and architecture in Neo4j
 - **Agent memory** — persistent analyses, decisions, and changes across sessions
 - **DAG execution** — multi-step plans with tracking
@@ -25,8 +25,8 @@ Modern AI coding agents (Codex, Claude Code, Cursor) lack persistent, structured
 ### One-command setup
 
 ```bash
-git clone https://github.com/org/dev-graph-kit.git
-cd dev-graph-kit
+git clone https://github.com/org/rei-graph.git
+cd rei-graph
 ./setup.sh
 ```
 
@@ -35,34 +35,34 @@ cd dev-graph-kit
 **Prerequisites:** Docker, [uv](https://docs.astral.sh/uv), Node.js 18+
 
 ```bash
-git clone https://github.com/org/dev-graph-kit.git
-cd dev-graph-kit
+git clone https://github.com/org/rei-graph.git
+cd rei-graph
 cp .env.example .env
 uv sync
-cd packages/ingester_ts && npm install && cd ../..
+cd packages/ingester_ts && npm install && cd ../...
 docker compose up -d
-uv run dgk init
-uv run dgk doctor
+uv run rei init
+uv run rei doctor
 ```
 
 ### Scan your first project
 
 ```bash
 # Scan the built-in React demo
-uv run dgk scan examples/react_ts_app
+uv run rei scan examples/react_ts_app
 
 # Query the graph
-uv run dgk query "LoginForm"
+uv run rei query "LoginForm"
 
 # Impact analysis
-uv run dgk impact examples/react_ts_app/src/hooks.ts
+uv run rei impact examples/react_ts_app/src/hooks.ts
 ```
 
 ### Connect an agent
 
 ```bash
 # Start the MCP server (agents spawn this automatically)
-uv run dgk mcp
+uv run rei mcp
 ```
 
 See [docs/mcp.md](docs/mcp.md) for agent configuration (Cursor, Claude Code, Codex).
@@ -71,17 +71,17 @@ See [docs/mcp.md](docs/mcp.md) for agent configuration (Cursor, Claude Code, Cod
 
 | Command | Description |
 |---------|-------------|
-| `dgk init` | Initialize project, create `.dgk/project.toml` |
-| `dgk dev` | Start/stop local stack (Neo4j) |
-| `dgk scan [path]` | Scan TypeScript/TSX files into graph |
-| `dgk scan --changed` | Incremental scan of git-changed files only |
-| `dgk query "..."` | Search graph by name or label |
-| `dgk impact <file>` | Show impact analysis for a file |
-| `dgk plan "..."` | Create a DAG execution plan |
-| `dgk plans` | List open plans |
-| `dgk snapshot` | Export current graph to JSON |
-| `dgk mcp` | Start MCP server for agent connections |
-| `dgk doctor` | Check Neo4j and ingester health |
+| `rei init` | Initialize project, create `.rei/project.toml` |
+| `rei dev` | Start/stop local stack (Neo4j) |
+| `rei scan [path]` | Scan TypeScript/TSX files into graph |
+| `rei scan --changed` | Incremental scan of git-changed files only |
+| `rei query "..."` | Search graph by name or label |
+| `rei impact <file>` | Show impact analysis for a file |
+| `rei plan "..."` | Create a DAG execution plan |
+| `rei plans` | List open plans |
+| `rei snapshot` | Export current graph to JSON |
+| `rei mcp` | Start MCP server for agent connections |
+| `rei doctor` | Check Neo4j and ingester health |
 
 ## Services
 
@@ -89,7 +89,7 @@ See [docs/mcp.md](docs/mcp.md) for agent configuration (Cursor, Claude Code, Cod
 |---------|-----|------------|
 | Neo4j Browser | http://localhost:7474 | `docker compose up -d` |
 | Neo4j Bolt | bolt://localhost:7687 | `docker compose up -d` |
-| MCP Server | stdio | `dgk mcp` |
+| MCP Server | stdio | `rei mcp` |
 
 ## MCP tools
 
@@ -129,7 +129,7 @@ packages/
   storage/       — Neo4j, memory, DAG, snapshot clients
   ingester_ts/   — TypeScript (ts-morph) code scanner
   mcp_server/    — MCP server with all tools and resources
-  cli/           — dgk CLI (Click)
+  cli/           — rei CLI (Click)
 examples/
   react_ts_app/  — demo React/TS project
   express_api/   — demo Express API

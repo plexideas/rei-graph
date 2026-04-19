@@ -3,19 +3,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dgk-cli"
+name = "rei-cli"
 version = "0.1.0"
-description = "CLI for dev-graph-kit"
+description = "CLI for rei-graph"
 requires-python = ">=3.11"
-dependencies = ["click>=8.0", "rich>=13.0", "dgk-core", "dgk-storage", "dgk-mcp"]
+dependencies = ["click>=8.0", "rich>=13.0", "rei-core", "rei-storage", "rei-mcp"]
 
 [project.scripts]
-dgk = "dgk_cli.main:cli"
+rei = "rei_cli.main:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/dgk_cli"]
+packages = ["src/rei_cli"]
 
 [tool.uv.sources]
-dgk-core = { workspace = true }
-dgk-storage = { workspace = true }
-dgk-mcp = { workspace = true }
+rei-core = { workspace = true }
+rei-storage = { workspace = true }
+rei-mcp = { workspace = true }

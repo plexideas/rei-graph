@@ -7,7 +7,7 @@ from rich.spinner import Spinner
 
 
 class ScanProgress:
-    """Rich-powered progress reporting for dgk scan.
+    """Rich-powered progress reporting for rei scan.
 
     All Rich-specific code lives here; callers use only stdlib types.
     Injectable console enables unit-test output capture.

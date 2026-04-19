@@ -1,6 +1,6 @@
 # express-api
 
-Demo Express/TypeScript API used as a scan target for dev-graph-kit.
+Demo Express/TypeScript API used as a scan target for rei-graph.
 
 ## Structure
 
@@ -15,7 +15,7 @@ src/
 
 ## Graph coverage
 
-Running `dgk scan .` from this directory extracts:
+Running `rei scan .` from this directory extracts:
 
 - **Module** nodes for each file
 - **Function** nodes: `requireAuth`, `requireRole`, `findUserById`, `findUserByEmail`, `createUser`, `findPostsByAuthor`, `createPost`, `makeError`
@@ -27,8 +27,8 @@ Running `dgk scan .` from this directory extracts:
 
 ```bash
 # From repo root
-dgk scan examples/express_api
+rei scan examples/express_api
 
 # Or from this directory
-dgk scan .
+rei scan .
 ```

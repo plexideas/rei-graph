@@ -3,16 +3,16 @@ from unittest.mock import patch, MagicMock
 
 from click.testing import CliRunner
 
-from dgk_cli.main import cli
+from rei_cli.main import cli
 
 
 def test_snapshot_saves_graph_and_prints_path(tmp_path):
-    """dgk snapshot creates a snapshot and prints the saved path."""
+    """rei snapshot creates a snapshot and prints the saved path."""
     expected_path = str(tmp_path / "default" / "snapshots" / "snap_001.json")
     mock_client = MagicMock()
     mock_client.save_snapshot.return_value = expected_path
 
-    with patch("dgk_cli.commands.snapshot.SnapshotClient", return_value=mock_client):
+    with patch("rei_cli.commands.snapshot.SnapshotClient", return_value=mock_client):
         runner = CliRunner()
         result = runner.invoke(cli, ["snapshot", "--snapshot-dir", str(tmp_path)])
 
@@ -22,27 +22,27 @@ def test_snapshot_saves_graph_and_prints_path(tmp_path):
 
 
 def test_snapshot_uses_default_dir_when_not_specified():
-    """dgk snapshot uses ~/.dev-graph-kit/snapshots when no --snapshot-dir given."""
+    """rei snapshot uses ~/.rei-graph/snapshots when no --snapshot-dir given."""
     mock_client = MagicMock()
     mock_client.save_snapshot.return_value = "/some/path/snap.json"
 
-    with patch("dgk_cli.commands.snapshot.SnapshotClient", return_value=mock_client):
+    with patch("rei_cli.commands.snapshot.SnapshotClient", return_value=mock_client):
         runner = CliRunner()
         result = runner.invoke(cli, ["snapshot"])
 
     assert result.exit_code == 0
     args, kwargs = mock_client.save_snapshot.call_args
     snapshot_dir = args[0]
-    assert "dev-graph-kit" in str(snapshot_dir) or str(snapshot_dir).startswith("/")
+    assert "rei-graph" in str(snapshot_dir) or str(snapshot_dir).startswith("/")
 
 
 # ── Phase 5: project scoping tests ──
 
 
 def test_snapshot_resolves_project_id_and_scopes_client():
-    """dgk snapshot reads .dgk/project.toml and constructs SnapshotClient with project_id."""
-    with patch("dgk_cli.commands.snapshot.SnapshotClient") as mock_client_cls, \
-         patch("dgk_cli.commands.snapshot._resolve_project_id", return_value="/home/user/myproject"):
+    """rei snapshot reads .rei/project.toml and constructs SnapshotClient with project_id."""
+    with patch("rei_cli.commands.snapshot.SnapshotClient") as mock_client_cls, \
+         patch("rei_cli.commands.snapshot._resolve_project_id", return_value="/home/user/myproject"):
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
         mock_client.save_snapshot.return_value = "/some/path/snap.json"
@@ -55,9 +55,9 @@ def test_snapshot_resolves_project_id_and_scopes_client():
 
 
 def test_snapshot_works_without_project_toml():
-    """dgk snapshot without .dgk/project.toml constructs SnapshotClient with project_id=None."""
-    with patch("dgk_cli.commands.snapshot.SnapshotClient") as mock_client_cls, \
-         patch("dgk_cli.commands.snapshot._resolve_project_id", return_value=None):
+    """rei snapshot without .rei/project.toml constructs SnapshotClient with project_id=None."""
+    with patch("rei_cli.commands.snapshot.SnapshotClient") as mock_client_cls, \
+         patch("rei_cli.commands.snapshot._resolve_project_id", return_value=None):
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
         mock_client.save_snapshot.return_value = "/some/path/snap.json"

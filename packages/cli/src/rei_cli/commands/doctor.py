@@ -1,6 +1,6 @@
 import click
 
-from dgk_storage.neo4j_client import check_neo4j_health
+from rei_storage.neo4j_client import check_neo4j_health
 
 
 @click.command()

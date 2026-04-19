@@ -4,12 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from dgk_storage.dag_client import DagClient
+from rei_storage.dag_client import DagClient
 
 
 @pytest.fixture
 def mock_driver():
-    with patch("dgk_storage.dag_client.GraphDatabase") as mock_gdb:
+    with patch("rei_storage.dag_client.GraphDatabase") as mock_gdb:
         mock_driver_ = MagicMock()
         mock_session = MagicMock()
         mock_driver_.session.return_value.__enter__ = lambda s, *a: mock_session
@@ -208,7 +208,7 @@ class TestDagClientProjectScoping:
 
     @pytest.fixture(autouse=True)
     def setup_mock(self):
-        with patch("dgk_storage.dag_client.GraphDatabase") as mock_gdb:
+        with patch("rei_storage.dag_client.GraphDatabase") as mock_gdb:
             self.mock_driver = MagicMock()
             self.mock_session = MagicMock()
             self.mock_driver.session.return_value.__enter__ = lambda s, *a: self.mock_session

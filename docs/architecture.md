@@ -1,6 +1,6 @@
 # Architecture
 
-How dev-graph-kit is structured and why.
+How rei-graph is structured and why.
 
 ## Overview
 
@@ -12,7 +12,7 @@ How dev-graph-kit is structured and why.
                            │ MCP protocol (stdio)
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      MCP Server (dgk mcp)                       │
+│                      MCP Server (rei mcp)                       │
 │   graph.*   memory.*   dag.*   scan.*   project.*   tools       │
 └──────┬─────────────┬───────────────┬────────────────────────────┘
        │             │               │
@@ -65,12 +65,12 @@ Called as a subprocess by the Python CLI: `node ingester/cli.js <file>`.
 Python MCP server built with the `mcp` SDK. All tools are pure synchronous functions that accept `arguments: dict` and optional `client: Neo4jClient`. The `@server.call_tool()` handler dispatches to these functions.
 
 ### `packages/cli`
-Click-based CLI. Each subcommand is a separate module under `commands/`. The `dgk` entry point is registered in `pyproject.toml`.
+Click-based CLI. Each subcommand is a separate module under `commands/`. The `rei` entry point is registered in `pyproject.toml`.
 
 ## Data flow: scan
 
 ```
-dgk scan src/auth.ts
+rei scan src/auth.ts
   │
   ├─ _find_ingester()        → locate node binary
   ├─ subprocess.run(node ...) → JSON output
@@ -83,7 +83,7 @@ dgk scan src/auth.ts
 ## Data flow: incremental scan (`--changed`)
 
 ```
-dgk scan . --changed
+rei scan . --changed
   │
   ├─ _get_deleted_files(root)  → git diff --diff-filter=D HEAD
   ├─ _get_changed_files(root)  → git diff --name-only HEAD
@@ -139,6 +139,6 @@ See [mcp.md](mcp.md) for the full tool reference.
 
 ## Configuration
 
-Project config lives in `.dgk/project.toml`. Global config (Neo4j connection, defaults) in `~/.dev-graph-kit/config.toml`. Both are read by `dgk_core.config`.
+Project config lives in `.rei/project.toml`. Global config (Neo4j connection, defaults) in `~/.rei-graph/config.toml`. Both are read by `rei_core.config`.
 
 See [PRD.md](PRD.md) § 3.6 for the full config schema.

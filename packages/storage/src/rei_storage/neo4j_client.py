@@ -7,8 +7,8 @@ from pathlib import Path
 
 from neo4j import GraphDatabase
 
-from dgk_core.hashing import project_hash as _project_hash
-from dgk_core.schemas import GraphNode, GraphRelationship
+from rei_core.hashing import project_hash as _project_hash
+from rei_core.schemas import GraphNode, GraphRelationship
 
 
 def check_neo4j_health(host: str = "localhost", http_port: int = 7474) -> dict:
@@ -26,7 +26,7 @@ class Neo4jClient:
         self,
         uri: str = "bolt://localhost:7687",
         user: str = "neo4j",
-        password: str = "devgraphkit",
+        password: str = "reigraph",
         project_id: str | None = None,
     ):
         self._driver = GraphDatabase.driver(uri, auth=(user, password))

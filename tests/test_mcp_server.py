@@ -1,7 +1,7 @@
 import json
 from unittest.mock import MagicMock
 
-from dgk_mcp.server import (
+from rei_mcp.server import (
     get_context,
     get_neighbors,
     get_schema,
@@ -189,26 +189,26 @@ def test_upsert_relations_calls_client_upsert_relationships():
 # ─── scan.project / scan.file ─────────────────────────────────────────────────
 
 def test_scan_project_invokes_dgk_scan(tmp_path):
-    """scan_project calls dgk scan <path> and returns status."""
+    """scan_project calls rei scan <path> and returns status."""
     from unittest.mock import patch
 
     mock_result = MagicMock()
     mock_result.returncode = 0
     mock_result.stdout = "Done: 5 nodes, 3 relationships"
 
-    with patch("dgk_mcp.server.subprocess") as mock_subprocess:
+    with patch("rei_mcp.server.subprocess") as mock_subprocess:
         mock_subprocess.run.return_value = mock_result
         result = scan_project({"path": str(tmp_path)})
 
     mock_subprocess.run.assert_called_once_with(
-        ["dgk", "scan", str(tmp_path)], capture_output=True, text=True
+        ["rei", "scan", str(tmp_path)], capture_output=True, text=True
     )
     assert result["status"] == "ok"
     assert "5 nodes" in result["output"]
 
 
 def test_scan_file_invokes_dgk_scan(tmp_path):
-    """scan_file calls dgk scan <file> and returns status."""
+    """scan_file calls rei scan <file> and returns status."""
     from unittest.mock import patch
 
     ts_file = str(tmp_path / "app.ts")
@@ -216,7 +216,7 @@ def test_scan_file_invokes_dgk_scan(tmp_path):
     mock_result.returncode = 1
     mock_result.stdout = "Error: file not found"
 
-    with patch("dgk_mcp.server.subprocess") as mock_subprocess:
+    with patch("rei_mcp.server.subprocess") as mock_subprocess:
         mock_subprocess.run.return_value = mock_result
         result = scan_file({"path": ts_file})
 
@@ -232,7 +232,7 @@ def test_project_status_returns_health_and_node_count():
     mock_client = MagicMock()
     mock_client.count_nodes.return_value = 42
 
-    with patch("dgk_mcp.server.check_neo4j_health") as mock_health:
+    with patch("rei_mcp.server.check_neo4j_health") as mock_health:
         mock_health.return_value = {"status": "healthy", "url": "http://localhost:7474"}
         result = project_status({}, mock_client)
 
@@ -417,26 +417,26 @@ def test_upsert_relations_calls_client_upsert_relationships():
 # ─── scan.project / scan.file ─────────────────────────────────────────────────
 
 def test_scan_project_invokes_dgk_scan(tmp_path):
-    """scan_project calls dgk scan <path> and returns status."""
+    """scan_project calls rei scan <path> and returns status."""
     from unittest.mock import patch
 
     mock_result = MagicMock()
     mock_result.returncode = 0
     mock_result.stdout = "Done: 5 nodes, 3 relationships"
 
-    with patch("dgk_mcp.server.subprocess") as mock_subprocess:
+    with patch("rei_mcp.server.subprocess") as mock_subprocess:
         mock_subprocess.run.return_value = mock_result
         result = scan_project({"path": str(tmp_path)})
 
     mock_subprocess.run.assert_called_once_with(
-        ["dgk", "scan", str(tmp_path)], capture_output=True, text=True
+        ["rei", "scan", str(tmp_path)], capture_output=True, text=True
     )
     assert result["status"] == "ok"
     assert "5 nodes" in result["output"]
 
 
 def test_scan_file_invokes_dgk_scan(tmp_path):
-    """scan_file calls dgk scan <file> and returns status."""
+    """scan_file calls rei scan <file> and returns status."""
     from unittest.mock import patch
 
     ts_file = str(tmp_path / "app.ts")
@@ -444,7 +444,7 @@ def test_scan_file_invokes_dgk_scan(tmp_path):
     mock_result.returncode = 1
     mock_result.stdout = "Error: file not found"
 
-    with patch("dgk_mcp.server.subprocess") as mock_subprocess:
+    with patch("rei_mcp.server.subprocess") as mock_subprocess:
         mock_subprocess.run.return_value = mock_result
         result = scan_file({"path": ts_file})
 
@@ -460,7 +460,7 @@ def test_project_status_returns_health_and_node_count():
     mock_client = MagicMock()
     mock_client.count_nodes.return_value = 42
 
-    with patch("dgk_mcp.server.check_neo4j_health") as mock_health:
+    with patch("rei_mcp.server.check_neo4j_health") as mock_health:
         mock_health.return_value = {"status": "healthy", "url": "http://localhost:7474"}
         result = project_status({}, mock_client)
 
@@ -647,20 +647,20 @@ class TestDagToolsAndResourcesRegistered:
 
 class TestScanChangedFiles:
     def test_scan_changed_files_calls_dgk_scan_changed(self, tmp_path):
-        """scan_changed_files runs dgk scan --changed for the given path."""
+        """scan_changed_files runs rei scan --changed for the given path."""
         from unittest.mock import patch
-        from dgk_mcp.server import scan_changed_files
+        from rei_mcp.server import scan_changed_files
 
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "Done: 2 nodes, 1 relationships from 1 changed files"
 
-        with patch("dgk_mcp.server.subprocess") as mock_subprocess:
+        with patch("rei_mcp.server.subprocess") as mock_subprocess:
             mock_subprocess.run.return_value = mock_result
             result = scan_changed_files({"path": str(tmp_path)})
 
         mock_subprocess.run.assert_called_once_with(
-            ["dgk", "scan", str(tmp_path), "--changed"],
+            ["rei", "scan", str(tmp_path), "--changed"],
             capture_output=True,
             text=True,
         )
@@ -670,13 +670,13 @@ class TestScanChangedFiles:
     def test_scan_changed_files_returns_error_on_failure(self, tmp_path):
         """scan_changed_files returns error status when command fails."""
         from unittest.mock import patch
-        from dgk_mcp.server import scan_changed_files
+        from rei_mcp.server import scan_changed_files
 
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stdout = "Error: no git repo"
 
-        with patch("dgk_mcp.server.subprocess") as mock_subprocess:
+        with patch("rei_mcp.server.subprocess") as mock_subprocess:
             mock_subprocess.run.return_value = mock_result
             result = scan_changed_files({"path": str(tmp_path)})
 
@@ -687,13 +687,13 @@ class TestProjectSnapshot:
     def test_project_snapshot_calls_save_snapshot(self, tmp_path):
         """project_snapshot instantiates SnapshotClient and saves snapshot."""
         from unittest.mock import patch
-        from dgk_mcp.server import project_snapshot
+        from rei_mcp.server import project_snapshot
 
         expected_path = str(tmp_path / "default" / "snapshots" / "snap_001.json")
         mock_client = MagicMock()
         mock_client.save_snapshot.return_value = expected_path
 
-        with patch("dgk_mcp.server.SnapshotClient", return_value=mock_client):
+        with patch("rei_mcp.server.SnapshotClient", return_value=mock_client):
             result = project_snapshot({"snapshot_dir": str(tmp_path), "project_id": "default"})
 
         mock_client.save_snapshot.assert_called_once()
@@ -701,14 +701,14 @@ class TestProjectSnapshot:
         assert result["path"] == expected_path
 
     def test_project_snapshot_uses_default_snapshot_dir(self, tmp_path):
-        """project_snapshot uses ~/.dev-graph-kit/snapshots when no dir given."""
+        """project_snapshot uses ~/.rei-graph/snapshots when no dir given."""
         from unittest.mock import patch
-        from dgk_mcp.server import project_snapshot
+        from rei_mcp.server import project_snapshot
 
         mock_client = MagicMock()
         mock_client.save_snapshot.return_value = "/some/path"
 
-        with patch("dgk_mcp.server.SnapshotClient", return_value=mock_client):
+        with patch("rei_mcp.server.SnapshotClient", return_value=mock_client):
             result = project_snapshot({})
 
         mock_client.save_snapshot.assert_called_once()
@@ -725,7 +725,7 @@ class TestPhase7ToolsRegistered:
 
 # ─── Phase 6: Multi-project MCP ──────────────────────────────────────────────
 
-from dgk_mcp.server import _get_project_clients, _client_cache
+from rei_mcp.server import _get_project_clients, _client_cache
 
 
 class TestPhase6AllToolsRequireProjectId:
@@ -746,35 +746,35 @@ class TestPhase6LazyClientCache:
     def test_get_project_clients_creates_scoped_neo4j_client(self):
         """_get_project_clients creates Neo4jClient with correct project_id."""
         from unittest.mock import patch
-        from dgk_mcp.server import _get_project_clients
+        from rei_mcp.server import _get_project_clients
 
-        with patch("dgk_mcp.server.Neo4jClient") as MockNeo4j, \
-             patch("dgk_mcp.server.MemoryClient"), \
-             patch("dgk_mcp.server.DagClient"), \
-             patch("dgk_mcp.server._client_cache", {}):
+        with patch("rei_mcp.server.Neo4jClient") as MockNeo4j, \
+             patch("rei_mcp.server.MemoryClient"), \
+             patch("rei_mcp.server.DagClient"), \
+             patch("rei_mcp.server._client_cache", {}):
             _get_project_clients("/project/alpha")
             MockNeo4j.assert_called_once_with(project_id="/project/alpha")
 
     def test_get_project_clients_reuses_cached_instance(self):
         """_get_project_clients returns same instance on repeated calls."""
         from unittest.mock import MagicMock, patch
-        from dgk_mcp.server import _get_project_clients
+        from rei_mcp.server import _get_project_clients
 
         fake_clients = MagicMock()
         cache = {"/project/alpha": fake_clients}
-        with patch("dgk_mcp.server._client_cache", cache):
+        with patch("rei_mcp.server._client_cache", cache):
             result = _get_project_clients("/project/alpha")
         assert result is fake_clients
 
     def test_different_project_ids_get_different_cached_clients(self):
         """_get_project_clients creates separate entries for different project_ids."""
         from unittest.mock import patch
-        from dgk_mcp.server import _get_project_clients
+        from rei_mcp.server import _get_project_clients
 
-        with patch("dgk_mcp.server.Neo4jClient") as MockNeo4j, \
-             patch("dgk_mcp.server.MemoryClient"), \
-             patch("dgk_mcp.server.DagClient"), \
-             patch("dgk_mcp.server._client_cache", {}):
+        with patch("rei_mcp.server.Neo4jClient") as MockNeo4j, \
+             patch("rei_mcp.server.MemoryClient"), \
+             patch("rei_mcp.server.DagClient"), \
+             patch("rei_mcp.server._client_cache", {}):
             _get_project_clients("/project/alpha")
             _get_project_clients("/project/beta")
             assert MockNeo4j.call_count == 2
@@ -785,24 +785,24 @@ class TestPhase6LazyClientCache:
     def test_memory_client_created_with_project_id(self):
         """_get_project_clients creates MemoryClient with correct project_id."""
         from unittest.mock import patch
-        from dgk_mcp.server import _get_project_clients
+        from rei_mcp.server import _get_project_clients
 
-        with patch("dgk_mcp.server.Neo4jClient"), \
-             patch("dgk_mcp.server.MemoryClient") as MockMem, \
-             patch("dgk_mcp.server.DagClient"), \
-             patch("dgk_mcp.server._client_cache", {}):
+        with patch("rei_mcp.server.Neo4jClient"), \
+             patch("rei_mcp.server.MemoryClient") as MockMem, \
+             patch("rei_mcp.server.DagClient"), \
+             patch("rei_mcp.server._client_cache", {}):
             _get_project_clients("/project/alpha")
             MockMem.assert_called_once_with(project_id="/project/alpha")
 
     def test_dag_client_created_with_project_id(self):
         """_get_project_clients creates DagClient with correct project_id."""
         from unittest.mock import patch
-        from dgk_mcp.server import _get_project_clients
+        from rei_mcp.server import _get_project_clients
 
-        with patch("dgk_mcp.server.Neo4jClient"), \
-             patch("dgk_mcp.server.MemoryClient"), \
-             patch("dgk_mcp.server.DagClient") as MockDag, \
-             patch("dgk_mcp.server._client_cache", {}):
+        with patch("rei_mcp.server.Neo4jClient"), \
+             patch("rei_mcp.server.MemoryClient"), \
+             patch("rei_mcp.server.DagClient") as MockDag, \
+             patch("rei_mcp.server._client_cache", {}):
             _get_project_clients("/project/alpha")
             MockDag.assert_called_once_with(project_id="/project/alpha")
 
@@ -841,7 +841,7 @@ class TestPhase6ScopedToolHandlers:
         mock_client = MagicMock()
         mock_client.save_snapshot.return_value = "/snap/path.json"
 
-        with patch("dgk_mcp.server.SnapshotClient", return_value=mock_client) as MockSnap:
+        with patch("rei_mcp.server.SnapshotClient", return_value=mock_client) as MockSnap:
             project_snapshot({"snapshot_dir": str(tmp_path), "project_id": "/project/alpha"})
 
         MockSnap.assert_called_once_with(project_id="/project/alpha")

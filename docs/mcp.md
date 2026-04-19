@@ -1,20 +1,20 @@
 # MCP Integration
 
-How to connect dev-graph-kit to your AI coding agent via MCP.
+How to connect rei-graph to your AI coding agent via MCP.
 
 ## Overview
 
-dev-graph-kit exposes a Model Context Protocol (MCP) server that runs in `stdio` mode. Your agent spawns it as a subprocess and communicates via JSON-RPC over stdin/stdout.
+rei-graph exposes a Model Context Protocol (MCP) server that runs in `stdio` mode. Your agent spawns it as a subprocess and communicates via JSON-RPC over stdin/stdout.
 
 ## Starting the MCP server
 
 ```bash
-uv run dgk mcp
+uv run rei mcp
 ```
 
 Or, if you've activated the venv:
 ```bash
-dgk mcp
+rei mcp
 ```
 
 ## Agent configuration
@@ -26,13 +26,13 @@ Add to `~/.cursor/mcp.json` (or workspace `.cursor/mcp.json`):
 ```json
 {
   "mcpServers": {
-    "dev-graph-kit": {
+    "rei-graph": {
       "command": "uv",
-      "args": ["--directory", "/path/to/dev-graph-kit", "run", "dgk", "mcp"],
+      "args": ["--directory", "/path/to/rei-graph", "run", "rei", "mcp"],
       "env": {
         "NEO4J_URI": "bolt://localhost:7687",
         "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "devgraphkit"
+        "NEO4J_PASSWORD": "reigraph"
       }
     }
   }
@@ -45,13 +45,13 @@ Add to your Claude Code MCP config (`~/.claude/mcp_servers.json`):
 
 ```json
 {
-  "dev-graph-kit": {
+  "rei-graph": {
     "command": "uv",
-    "args": ["--directory", "/path/to/dev-graph-kit", "run", "dgk", "mcp"],
+    "args": ["--directory", "/path/to/rei-graph", "run", "rei", "mcp"],
     "env": {
       "NEO4J_URI": "bolt://localhost:7687",
       "NEO4J_USER": "neo4j",
-      "NEO4J_PASSWORD": "devgraphkit"
+      "NEO4J_PASSWORD": "reigraph"
     }
   }
 }
@@ -59,12 +59,12 @@ Add to your Claude Code MCP config (`~/.claude/mcp_servers.json`):
 
 Or via the Claude Code CLI:
 ```bash
-claude mcp add dev-graph-kit \
+claude mcp add rei-graph \
   --command "uv" \
-  --args "--directory /path/to/dev-graph-kit run dgk mcp" \
+  --args "--directory /path/to/rei-graph run rei mcp" \
   --env NEO4J_URI=bolt://localhost:7687 \
   --env NEO4J_USER=neo4j \
-  --env NEO4J_PASSWORD=devgraphkit
+  --env NEO4J_PASSWORD=reigraph
 ```
 
 ### Codex (OpenAI)
@@ -78,11 +78,11 @@ Add to your Codex agent config:
       "type": "mcp",
       "server": {
         "command": "uv",
-        "args": ["--directory", "/path/to/dev-graph-kit", "run", "dgk", "mcp"],
+        "args": ["--directory", "/path/to/rei-graph", "run", "rei", "mcp"],
         "env": {
           "NEO4J_URI": "bolt://localhost:7687",
           "NEO4J_USER": "neo4j",
-          "NEO4J_PASSWORD": "devgraphkit"
+          "NEO4J_PASSWORD": "reigraph"
         }
       }
     }
@@ -274,8 +274,8 @@ Get Neo4j health and total node count.
 Export the current graph to a JSON snapshot.
 
 ```json
-{ "snapshot_dir": "~/.dev-graph-kit/snapshots", "project_id": "my-app" }
-→ { "status": "ok", "path": "/Users/.../.dev-graph-kit/snapshots/my-app/snapshots/snap_20260418.json" }
+{ "snapshot_dir": "~/.rei-graph/snapshots", "project_id": "my-app" }
+→ { "status": "ok", "path": "/Users/.../.rei-graph/snapshots/my-app/snapshots/snap_20260418.json" }
 ```
 
 ## Resources

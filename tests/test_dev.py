@@ -3,12 +3,12 @@ import subprocess
 
 from click.testing import CliRunner
 
-from dgk_cli.main import cli
+from rei_cli.main import cli
 
 
 def test_dev_starts_neo4j(monkeypatch):
-    """dgk dev starts Neo4j via docker compose."""
-    with patch("dgk_cli.commands.dev.subprocess") as mock_subprocess:
+    """rei dev starts Neo4j via docker compose."""
+    with patch("rei_cli.commands.dev.subprocess") as mock_subprocess:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "Container neo4j started"
@@ -25,8 +25,8 @@ def test_dev_starts_neo4j(monkeypatch):
 
 
 def test_dev_reports_docker_failure(monkeypatch):
-    """dgk dev reports error when docker compose fails."""
-    with patch("dgk_cli.commands.dev.subprocess") as mock_subprocess:
+    """rei dev reports error when docker compose fails."""
+    with patch("rei_cli.commands.dev.subprocess") as mock_subprocess:
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stderr = "docker: command not found"

@@ -2,9 +2,9 @@
 
 ## Problem Statement
 
-When a developer runs `dgk scan <directory>` on a large TypeScript/TSX project, the process emits a single line ("Scanning N file(s)...") and then goes silent for an indefinite amount of time. Users have no way to tell whether the scan is progressing, stuck, or silently failing. This causes confusion, mistrust, and premature interruptions of legitimate long-running scans.
+When a developer runs `rei scan <directory>` on a large TypeScript/TSX project, the process emits a single line ("Scanning N file(s)...") and then goes silent for an indefinite amount of time. Users have no way to tell whether the scan is progressing, stuck, or silently failing. This causes confusion, mistrust, and premature interruptions of legitimate long-running scans.
 
-The same problem affects `dgk scan --changed` (incremental scans) and single-file scans, though to a lesser degree.
+The same problem affects `rei scan --changed` (incremental scans) and single-file scans, though to a lesser degree.
 
 ---
 
@@ -19,15 +19,15 @@ Replace the static "Scanning…" message with a Rich-powered animated progress b
 1. As a developer scanning a large TypeScript monorepo, I want to see an animated progress bar so that I know the tool is actively working and hasn't frozen.
 2. As a developer scanning a project, I want to see the percentage and file count (e.g., `42%  21/50 files`) so that I can estimate how long the scan will take.
 3. As a developer, I want progress to appear by default without any extra flags so that I don't need to remember a special option to get basic visibility.
-4. As a developer running `dgk scan` in a CI pipeline, I want plain-text status lines (no ANSI animation) when stdout is not a TTY so that CI logs are readable and artifact-friendly.
+4. As a developer running `rei scan` in a CI pipeline, I want plain-text status lines (no ANSI animation) when stdout is not a TTY so that CI logs are readable and artifact-friendly.
 5. As a developer who wants more detail, I want to pass `--verbose` to see the filename and node/relationship counts for each file as it is processed.
 6. As a developer scanning a single file, I want to see a spinner so I know the tool is working, even for fast operations.
-7. As a developer running `dgk scan --changed`, I want the same progress UX as a full directory scan so that the experience is consistent.
+7. As a developer running `rei scan --changed`, I want the same progress UX as a full directory scan so that the experience is consistent.
 8. As a developer whose project has some unparseable files, I want parse warnings collected and shown once at the end of the scan rather than inline, so that the progress bar is not disrupted.
 9. As a developer, I want the final summary to include elapsed time (e.g., `Done in 4.2s: 80 nodes, 120 rels from 12 files`) so I can benchmark scan performance over time.
 10. As a developer, I want a warning count in the summary (e.g., `1 file failed to parse`) so I know there were issues without hunting through scrollback.
 11. As a developer integrating through MCP, I want `scan.project`, `scan.file`, and `scan.changed_files` tools to return the same final summary data they always have, unaffected by the progress UI changes.
-12. As a developer writing automation around `dgk scan`, I want `--verbose` output to include structured detail (file path, nodes, rels) on separate lines so that output can be grep'd or piped.
+12. As a developer writing automation around `rei scan`, I want `--verbose` output to include structured detail (file path, nodes, rels) on separate lines so that output can be grep'd or piped.
 13. As a developer, I want the progress bar to disappear or resolve cleanly to the final summary line when the scan completes, so that the terminal is not left cluttered.
 14. As a developer, I want the scan command to still exit with a non-zero code on fatal errors, regardless of the new progress UI.
 15. As a developer scanning an empty or excluded directory, I want a clear message ("No TS/TSX files found to scan.") rather than a confusing empty progress bar.
@@ -38,7 +38,7 @@ Replace the static "Scanning…" message with a Rich-powered animated progress b
 
 ### Modules to build / modify
 
-**New: `dgk_cli/progress.py` — `ScanProgress` (deep module)**
+**New: `rei_cli/progress.py` — `ScanProgress` (deep module)**
 
 A standalone, testable class that encapsulates all progress-reporting logic. The rest of the codebase calls only this class; all Rich-specific code lives here.
 
@@ -50,7 +50,7 @@ A standalone, testable class that encapsulates all progress-reporting logic. The
 - Single-file variant: use a Rich `Spinner` instead of a `Progress` bar.
 - TTY detection: delegated to Rich's `Console` (no manual ANSI detection needed). Non-TTY mode automatically produces plain-text output.
 
-**Modified: `dgk_cli/commands/scan.py`**
+**Modified: `rei_cli/commands/scan.py`**
 
 - Add `--verbose / -v` flag to the `scan` Click command.
 - Instantiate `ScanProgress` at the start of each scan path (directory, `--changed`, single-file).
@@ -66,7 +66,7 @@ A standalone, testable class that encapsulates all progress-reporting logic. The
 
 - The `ScanProgress` interface does not expose Rich types in its public API (only stdlib types: `str`, `int`, `float`, `bool`). This means tests need no Rich knowledge.
 - `scan.py` does not directly import Rich; it only imports `ScanProgress`.
-- MCP tool implementations (`dgk_mcp/server.py`) are not changed; they call the same internal scan functions and get back the same `ScanResult` data.
+- MCP tool implementations (`rei_mcp/server.py`) are not changed; they call the same internal scan functions and get back the same `ScanResult` data.
 
 ### Non-TTY behaviour
 
@@ -88,14 +88,14 @@ When `Console` detects a non-TTY environment (no `force_terminal`), Rich automat
 
 ### Modules to test
 
-**1. `dgk_cli/progress.py` — unit tests (new `tests/test_progress.py`)**
+**1. `rei_cli/progress.py` — unit tests (new `tests/test_progress.py`)**
 - `ScanProgress` in normal mode: `finish()` output contains elapsed time, node count, rel count, file count.
 - `ScanProgress` in verbose mode: `advance()` output contains filename, node count, rel count.
 - `ScanProgress` with warnings: `finish()` output contains the collected warning messages.
 - `ScanProgress` with no files: `finish()` handles zero totals cleanly.
 - Non-TTY mode: output contains no ANSI escape sequences (inject a `Console` with `force_terminal=False`).
 
-**2. `dgk_cli/commands/scan.py` — CLI integration tests (extend `tests/test_scan.py`)**
+**2. `rei_cli/commands/scan.py` — CLI integration tests (extend `tests/test_scan.py`)**
 - Directory scan: output contains a summary with elapsed time.
 - Directory scan `--verbose`: output contains per-file lines.
 - `--changed` scan: output contains a summary with elapsed time.
@@ -108,9 +108,9 @@ When `Console` detects a non-TTY environment (no `force_terminal`), Rich automat
 ## Out of Scope
 
 - Streaming or live progress over MCP/stdio — MCP tools return final results only.
-- JSON or machine-readable output mode for `dgk scan`.
-- Progress reporting for `dgk query`, `dgk impact`, or other commands.
-- Persisting scan timing metrics to the graph or to `.dgk/`.
+- JSON or machine-readable output mode for `rei scan`.
+- Progress reporting for `rei query`, `rei impact`, or other commands.
+- Persisting scan timing metrics to the graph or to `.rei/`.
 - A `--quiet` flag to suppress the progress bar entirely.
 - Windows ANSI compatibility (Rich handles this, but it is not explicitly tested).
 - Parallel/concurrent file scanning to speed up the operation itself.

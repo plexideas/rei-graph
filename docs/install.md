@@ -1,6 +1,6 @@
 # Installation
 
-Get dev-graph-kit running in under 5 minutes.
+Get rei-graph running in under 5 minutes.
 
 ## Prerequisites
 
@@ -14,8 +14,8 @@ Get dev-graph-kit running in under 5 minutes.
 ## Quick start (automated)
 
 ```bash
-git clone https://github.com/org/dev-graph-kit.git
-cd dev-graph-kit
+git clone https://github.com/org/rei-graph.git
+cd rei-graph
 ./setup.sh
 ```
 
@@ -26,8 +26,8 @@ cd dev-graph-kit
 ### 1. Clone
 
 ```bash
-git clone https://github.com/org/dev-graph-kit.git
-cd dev-graph-kit
+git clone https://github.com/org/rei-graph.git
+cd rei-graph
 ```
 
 ### 2. Configure environment
@@ -58,13 +58,13 @@ docker compose up -d
 ### 6. Initialize project
 
 ```bash
-uv run dgk init
+uv run rei init
 ```
 
 ### 7. Verify everything works
 
 ```bash
-uv run dgk doctor
+uv run rei doctor
 ```
 
 Expected output:
@@ -80,19 +80,19 @@ Expected output:
 |---------|-----|---------|
 | Neo4j Browser | http://localhost:7474 | Graph visualization / Cypher queries |
 | Neo4j Bolt | bolt://localhost:7687 | Database connection |
-| MCP Server | stdio (via `dgk mcp`) | Agent protocol interface |
+| MCP Server | stdio (via `rei mcp`) | Agent protocol interface |
 
 ## Scanning your first project
 
 ```bash
 # Scan the built-in demo
-uv run dgk scan examples/react_ts_app
+uv run rei scan examples/react_ts_app
 
 # Query the graph
-uv run dgk query "LoginForm"
+uv run rei query "LoginForm"
 
 # Run impact analysis
-uv run dgk impact examples/react_ts_app/src/hooks.ts
+uv run rei impact examples/react_ts_app/src/hooks.ts
 ```
 
 ## Updating
@@ -112,9 +112,9 @@ docker compose logs neo4j
 lsof -i :7687
 ```
 
-### `dgk` command not found
+### `rei` command not found
 ```bash
-uv run dgk --help
+uv run rei --help
 # Or activate the venv: source .venv/bin/activate
 ```
 

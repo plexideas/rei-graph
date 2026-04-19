@@ -1,4 +1,4 @@
-# Plan: dev-graph-kit
+# Plan: rei-graph
 
 > Source PRD: docs/PRD.md (v1.1, 2026-04-17)
 
@@ -7,7 +7,7 @@
 Durable decisions that apply across all phases:
 
 - **Tech stack**: Python monorepo (uv), Neo4j Community (Docker), Graphiti (memory), Dagster (DAG), TypeScript ts-morph (code scanner), MCP protocol (agent interface)
-- **CLI**: `dgk` command via Click/Typer — subcommands `init`, `dev`, `scan`, `query`, `impact`, `plan`, `plans`, `snapshot`, `doctor`
+- **CLI**: `rei` command via Click/Typer — subcommands `init`, `dev`, `scan`, `query`, `impact`, `plan`, `plans`, `snapshot`, `doctor`
 - **Graph ontology**:
   - Code nodes: `Repository`, `Package`, `Directory`, `File`, `Module`, `Function`, `Class`, `Component`, `Hook`, `Type`, `Interface`, `Endpoint`, `Table`, `Query`
   - Architecture nodes: `Feature`, `DomainEntity`, `BusinessRule`, `Integration`, `ConfigFlag`
@@ -17,7 +17,7 @@ Durable decisions that apply across all phases:
 - **MCP tool namespaces**: `graph.*`, `memory.*`, `dag.*`, `scan.*`, `project.*`
 - **MCP resource URIs**: `project://schema`, `project://summary`, `project://recent-decisions`, `project://open-plans`, `file://<path>/context`, `entity://<id>`, `plan://<id>`
 - **Services (local)**: Neo4j at `localhost:7474`/`7687`, Dagster UI at `localhost:3000`, MCP server at `localhost:8080`
-- **Config**: `.dgk/project.toml` (per-project), `~/.dev-graph-kit/config.toml` (global)
+- **Config**: `.rei/project.toml` (per-project), `~/.rei-graph/config.toml` (global)
 - **Package layout**: `packages/` with `core/`, `storage/`, `ingester_ts/`, `dag/`, `mcp_server/`, `cli/`
 - **Graph vs DAG separation**: Neo4j + Graphiti store permanent knowledge and memory; Dagster stores executable plans, step ordering, and execution status
 
@@ -29,15 +29,15 @@ Durable decisions that apply across all phases:
 
 ### What to build
 
-Scaffold the Python monorepo with `pyproject.toml`, `docker-compose.yml` (Neo4j service), and `.env.example`. Create the `dgk` CLI entry point with three subcommands: `dgk init` creates `.dgk/project.toml` with default config, `dgk dev` starts/stops the Neo4j container, and `dgk doctor` checks that Neo4j is reachable and returns a health status. The entire flow — init, start services, verify health — works end-to-end.
+Scaffold the Python monorepo with `pyproject.toml`, `docker-compose.yml` (Neo4j service), and `.env.example`. Create the `rei` CLI entry point with three subcommands: `rei init` creates `.rei/project.toml` with default config, `rei dev` starts/stops the Neo4j container, and `rei doctor` checks that Neo4j is reachable and returns a health status. The entire flow — init, start services, verify health — works end-to-end.
 
 ### Acceptance criteria
 
 - [ ] `uv sync` installs all Python dependencies
 - [ ] `docker compose up -d` starts Neo4j, accessible at `localhost:7474`
-- [ ] `dgk init` creates `.dgk/project.toml` with sensible defaults
-- [ ] `dgk dev` starts Neo4j (or reports it's already running)
-- [ ] `dgk doctor` reports Neo4j connectivity status
+- [ ] `rei init` creates `.rei/project.toml` with sensible defaults
+- [ ] `rei dev` starts Neo4j (or reports it's already running)
+- [ ] `rei doctor` reports Neo4j connectivity status
 - [ ] README has "What / Why / How to start" sections
 
 ---
@@ -48,15 +48,15 @@ Scaffold the Python monorepo with `pyproject.toml`, `docker-compose.yml` (Neo4j 
 
 ### What to build
 
-The TypeScript ingester (`ingester_ts`) parses a single `.ts`/`.tsx` file using ts-morph, extracts code nodes (`Module`, `Function`, `Class`, `Component`, `Hook`, `Type`, `Interface`) and relationships (`IMPORTS`, `CALLS`, `USES_TYPE`, `EXPOSES`), and writes them to Neo4j. The `dgk scan <file>` command invokes the ingester for one file, and `dgk query "<search>"` retrieves nodes by name or label. End-to-end: scan a single file, query its entities back from the graph.
+The TypeScript ingester (`ingester_ts`) parses a single `.ts`/`.tsx` file using ts-morph, extracts code nodes (`Module`, `Function`, `Class`, `Component`, `Hook`, `Type`, `Interface`) and relationships (`IMPORTS`, `CALLS`, `USES_TYPE`, `EXPOSES`), and writes them to Neo4j. The `rei scan <file>` command invokes the ingester for one file, and `rei query "<search>"` retrieves nodes by name or label. End-to-end: scan a single file, query its entities back from the graph.
 
 ### Acceptance criteria
 
 - [ ] `ingester_ts` parses a TS/TSX file and outputs structured nodes + relationships
 - [ ] Nodes written to Neo4j with correct labels and properties
 - [ ] Relationships written to Neo4j with correct types
-- [ ] `dgk scan <file>` triggers single-file ingestion
-- [ ] `dgk query "<name>"` returns matching nodes from Neo4j
+- [ ] `rei scan <file>` triggers single-file ingestion
+- [ ] `rei query "<name>"` returns matching nodes from Neo4j
 - [ ] Scanning the same file twice upserts (no duplicates)
 
 ---
@@ -67,14 +67,14 @@ The TypeScript ingester (`ingester_ts`) parses a single `.ts`/`.tsx` file using 
 
 ### What to **build**
 
-Extend `dgk scan .` to walk the project tree (respecting include/exclude from `.dgk/project.toml`), scan all TS/TSX files, and resolve cross-file imports into `IMPORTS` and `DEPENDS_ON` relationships. Add `dgk impact <file>` which traverses the graph to find directly and transitively affected nodes when a file changes. The code graph is now complete enough to answer dependency questions across an entire React/TS project.
+Extend `rei scan .` to walk the project tree (respecting include/exclude from `.rei/project.toml`), scan all TS/TSX files, and resolve cross-file imports into `IMPORTS` and `DEPENDS_ON` relationships. Add `rei impact <file>` which traverses the graph to find directly and transitively affected nodes when a file changes. The code graph is now complete enough to answer dependency questions across an entire React/TS project.
 
 ### Acceptance criteria
 
-- [ ] `dgk scan .` scans all matching files in the project tree
+- [ ] `rei scan .` scans all matching files in the project tree
 - [ ] Cross-file `IMPORTS` relationships resolved correctly
 - [ ] `DEPENDS_ON` relationships created between packages
-- [ ] `dgk impact <file>` returns direct and transitive dependents
+- [ ] `rei impact <file>` returns direct and transitive dependents
 - [ ] Scan respects `include`/`exclude` patterns from project config
 - [ ] Demo: scan `examples/react_ts_app`, query dependencies, run impact analysis
 
@@ -86,7 +86,7 @@ Extend `dgk scan .` to walk the project tree (respecting include/exclude from `.
 
 ### What to build
 
-A Python MCP server that exposes the graph and scan capabilities to agents. Tools: `graph.get_context`, `graph.search_entities`, `graph.get_neighbors`, `graph.impact_analysis`, `graph.upsert_entities`, `graph.upsert_relations`, `scan.project`, `scan.file`, `project.status`. Resources: `project://schema`, `project://summary`. The server starts via `dgk mcp` (stdio mode) or as part of `dgk dev`. An agent can connect, query the code graph, and get structured results.
+A Python MCP server that exposes the graph and scan capabilities to agents. Tools: `graph.get_context`, `graph.search_entities`, `graph.get_neighbors`, `graph.impact_analysis`, `graph.upsert_entities`, `graph.upsert_relations`, `scan.project`, `scan.file`, `project.status`. Resources: `project://schema`, `project://summary`. The server starts via `rei mcp` (stdio mode) or as part of `rei dev`. An agent can connect, query the code graph, and get structured results.
 
 ### Acceptance criteria
 
@@ -131,7 +131,7 @@ Integrate Graphiti as the temporal memory layer. Expose MCP tools: `memory.recor
 
 ### What to build
 
-Set up Dagster with jobs, ops, and resources. Expose MCP tools: `dag.create_plan`, `dag.run_plan`, `dag.get_plan`, `dag.step_status`, `dag.cancel_plan`. Plans are recorded in the knowledge graph via `memory.record_plan` with `PROPOSES` links. `dgk plan "<goal>"` creates a plan from the CLI, `dgk plans` lists open plans. Dagster UI available at `localhost:3000` for visual inspection. Add `project://open-plans` and `plan://<id>` resources.
+Set up Dagster with jobs, ops, and resources. Expose MCP tools: `dag.create_plan`, `dag.run_plan`, `dag.get_plan`, `dag.step_status`, `dag.cancel_plan`. Plans are recorded in the knowledge graph via `memory.record_plan` with `PROPOSES` links. `rei plan "<goal>"` creates a plan from the CLI, `rei plans` lists open plans. Dagster UI available at `localhost:3000` for visual inspection. Add `project://open-plans` and `plan://<id>` resources.
 
 ### Acceptance criteria
 
@@ -142,7 +142,7 @@ Set up Dagster with jobs, ops, and resources. Expose MCP tools: `dag.create_plan
 - [ ] `dag.get_plan` returns full plan details
 - [ ] `dag.cancel_plan` stops a running plan
 - [ ] Plans linked to knowledge graph via `memory.record_plan`
-- [ ] `dgk plan "<goal>"` and `dgk plans` CLI commands work
+- [ ] `rei plan "<goal>"` and `rei plans` CLI commands work
 - [ ] Dagster UI shows plan runs at `localhost:3000`
 - [ ] `project://open-plans` and `plan://<id>` resources readable
 - [ ] Demo: create a plan, execute it, check step status, see it in Dagster UI
@@ -155,16 +155,16 @@ Set up Dagster with jobs, ops, and resources. Expose MCP tools: `dag.create_plan
 
 ### What to build
 
-Add `dgk scan --changed` which uses git diff to identify modified files and re-scans only those, updating the graph incrementally (removing stale nodes for deleted entities). Add `dgk snapshot` to save the current graph state and `project.snapshot` MCP tool. Add `scan.changed_files` MCP tool. Snapshots stored under `~/.dev-graph-kit/projects/<id>/snapshots/`.
+Add `rei scan --changed` which uses git diff to identify modified files and re-scans only those, updating the graph incrementally (removing stale nodes for deleted entities). Add `rei snapshot` to save the current graph state and `project.snapshot` MCP tool. Add `scan.changed_files` MCP tool. Snapshots stored under `~/.rei-graph/projects/<id>/snapshots/`.
 
 ### Acceptance criteria
 
-- [ ] `dgk scan --changed` detects git-changed files and scans only those
+- [ ] `rei scan --changed` detects git-changed files and scans only those
 - [ ] Incremental scan removes nodes for deleted/renamed entities
 - [ ] `scan.changed_files` MCP tool works with a `since` parameter
-- [ ] `dgk snapshot` exports current graph state
+- [ ] `rei snapshot` exports current graph state
 - [ ] `project.snapshot` MCP tool creates snapshots
-- [ ] Snapshots stored in `~/.dev-graph-kit/projects/<id>/snapshots/`
+- [ ] Snapshots stored in `~/.rei-graph/projects/<id>/snapshots/`
 - [ ] Demo: modify a file, run incremental scan, verify only changed nodes updated
 
 ---

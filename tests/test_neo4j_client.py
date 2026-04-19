@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock, patch, call
 
-from dgk_core.hashing import project_hash
-from dgk_core.schemas import GraphNode, GraphRelationship, ScanResult
-from dgk_storage.neo4j_client import Neo4jClient
+from rei_core.hashing import project_hash
+from rei_core.schemas import GraphNode, GraphRelationship, ScanResult
+from rei_storage.neo4j_client import Neo4jClient
 
 
 SAMPLE_NODES = [

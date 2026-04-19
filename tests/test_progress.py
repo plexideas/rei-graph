@@ -2,7 +2,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from dgk_cli.progress import ScanProgress
+from rei_cli.progress import ScanProgress
 
 
 def _make_console() -> tuple[Console, StringIO]:

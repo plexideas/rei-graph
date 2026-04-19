@@ -15,7 +15,7 @@ class SnapshotClient:
         self,
         uri: str = "bolt://localhost:7687",
         user: str = "neo4j",
-        password: str = "devgraphkit",
+        password: str = "reigraph",
         project_id: str | None = None,
     ):
         self._driver = GraphDatabase.driver(uri, auth=(user, password))

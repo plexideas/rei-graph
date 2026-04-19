@@ -6,13 +6,13 @@
 
 Durable decisions that apply across all phases:
 
-- **New module**: `dgk_cli/progress.py` — `ScanProgress` deep module; all Rich-specific code lives here
+- **New module**: `rei_cli/progress.py` — `ScanProgress` deep module; all Rich-specific code lives here
 - **New dependency**: `rich` added to `packages/cli/pyproject.toml`
 - **New CLI flag**: `--verbose / -v` on the `scan` Click command
 - **ScanProgress public API**: `__init__(total, verbose, console)`, `start()`, `advance(file, nodes, rels)`, `add_warning(msg)`, `finish(elapsed, total_nodes, total_rels)` — only stdlib types exposed
 - **Testability**: injectable `Console(file=StringIO(), force_terminal=False)` for captured output assertions; no Rich internals in test assertions
 - **Non-TTY**: Rich's `Console` handles plain-text fallback automatically; no manual ANSI detection
-- **MCP unchanged**: `dgk_mcp/server.py` scan tools remain fire-and-forget subprocess calls returning final stdout
+- **MCP unchanged**: `rei_mcp/server.py` scan tools remain fire-and-forget subprocess calls returning final stdout
 
 ---
 
@@ -28,7 +28,7 @@ Add `rich` as a dependency. Create the `ScanProgress` class with multi-file mode
 
 - [ ] `rich` is listed in `packages/cli/pyproject.toml` dependencies
 - [ ] `ScanProgress` class exists with `start()`, `advance()`, `finish()` methods accepting only stdlib types
-- [ ] `dgk scan <directory>` shows an animated progress bar with percentage and file count during scan
+- [ ] `rei scan <directory>` shows an animated progress bar with percentage and file count during scan
 - [ ] Final summary line contains elapsed time, node count, relationship count, and file count (e.g. `Done in 4.2s: 80 nodes, 120 rels from 12 files`)
 - [ ] Progress bar disappears cleanly when scan completes, leaving only the summary
 - [ ] Unit tests for `ScanProgress` normal-mode `finish()` output pass
@@ -47,7 +47,7 @@ Add `--verbose / -v` flag to the `scan` Click command. In verbose mode, each cal
 
 ### Acceptance criteria
 
-- [ ] `dgk scan <directory> --verbose` prints a detail line per file (file path, nodes, rels)
+- [ ] `rei scan <directory> --verbose` prints a detail line per file (file path, nodes, rels)
 - [ ] Verbose detail lines are structured (one per line, greppable)
 - [ ] Parse warnings are collected during scan and not printed inline
 - [ ] `finish()` prints warning count and warning messages after the summary line
@@ -68,9 +68,9 @@ Use a Rich `Spinner` instead of a progress bar for single-file scans. Extend `Sc
 
 ### Acceptance criteria
 
-- [ ] `dgk scan <single-file>` shows a spinner during processing
-- [ ] `dgk scan <directory> --changed` shows progress bar, verbose detail, and enriched summary identical to full scan
-- [ ] `dgk scan <empty-or-excluded-directory>` prints "No TS/TSX files found to scan." and exits cleanly
+- [ ] `rei scan <single-file>` shows a spinner during processing
+- [ ] `rei scan <directory> --changed` shows progress bar, verbose detail, and enriched summary identical to full scan
+- [ ] `rei scan <empty-or-excluded-directory>` prints "No TS/TSX files found to scan." and exits cleanly
 - [ ] Output contains no ANSI escape sequences when run in non-TTY mode (verified via `Console(force_terminal=False)`)
 - [ ] MCP scan tools return unchanged response shape
 - [ ] Fatal errors still produce non-zero exit code

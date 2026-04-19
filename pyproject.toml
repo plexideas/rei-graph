@@ -1,10 +1,10 @@
 [project]
-name = "dev-graph-kit"
+name = "rei-graph"
 version = "0.1.0"
 description = "Local-first developer memory + DAG execution layer for coding agents"
 requires-python = ">=3.11"
 readme = "README.md"
-dependencies = ["dgk-cli"]
+dependencies = ["rei-cli"]
 
 [dependency-groups]
 dev = [
@@ -20,10 +20,10 @@ managed = true
 members = ["packages/core", "packages/storage", "packages/cli", "packages/mcp_server"]
 
 [tool.uv.sources]
-dgk-cli = { workspace = true }
-dgk-core = { workspace = true }
-dgk-storage = { workspace = true }
-dgk-mcp = { workspace = true }
+rei-cli = { workspace = true }
+rei-core = { workspace = true }
+rei-storage = { workspace = true }
+rei-mcp = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

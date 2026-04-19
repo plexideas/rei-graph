@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# setup.sh — one-command bootstrap for dev-graph-kit
+# setup.sh — one-command bootstrap for rei-graph
 set -euo pipefail
 
-echo "==> dev-graph-kit setup"
+echo "==> rei-graph setup"
 
 # ── 1. Check prerequisites ─────────────────────────────────────────────────────
 check_cmd() {
@@ -55,18 +55,18 @@ echo "  Neo4j ready"
 
 # ── 7. Initialize project ─────────────────────────────────────────────────────
 echo "==> Initializing project..."
-uv run dgk init
+uv run rei init
 
 # ── 8. Health check ───────────────────────────────────────────────────────────
 echo "==> Running health check..."
-uv run dgk doctor
+uv run rei doctor
 
 echo ""
-echo "  dev-graph-kit is ready!"
+echo "  rei-graph is ready!"
 echo ""
 echo "  Next steps:"
-echo "    uv run dgk scan examples/react_ts_app   # scan a demo project"
-echo "    uv run dgk query 'LoginForm'             # query the graph"
-echo "    uv run dgk mcp                           # start MCP server for agents"
+echo "    uv run rei scan examples/react_ts_app   # scan a demo project"
+echo "    uv run rei query 'LoginForm'             # query the graph"
+echo "    uv run rei mcp                           # start MCP server for agents"
 echo ""
 echo "  Docs: docs/install.md | docs/mcp.md | docs/examples.md"

@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock, call
 
 from click.testing import CliRunner
 
-from dgk_cli.main import cli
+from rei_cli.main import cli
 
 
 SAMPLE_INGESTER_OUTPUT = json.dumps({
@@ -21,13 +21,13 @@ SAMPLE_INGESTER_OUTPUT = json.dumps({
 
 
 def test_scan_invokes_ingester_and_writes_to_neo4j(tmp_path):
-    """dgk scan <file> calls the TS ingester and writes results to Neo4j."""
+    """rei scan <file> calls the TS ingester and writes results to Neo4j."""
     # Create a dummy TS file
     ts_file = tmp_path / "test.ts"
     ts_file.write_text("export function hello() {}")
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
 
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -57,12 +57,12 @@ def test_scan_invokes_ingester_and_writes_to_neo4j(tmp_path):
 
 
 def test_scan_reports_ingester_failure(tmp_path):
-    """dgk scan <file> reports error when ingester fails."""
+    """rei scan <file> reports error when ingester fails."""
     ts_file = tmp_path / "bad.ts"
     ts_file.write_text("invalid content")
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
 
         mock_client_cls.return_value.get_project.return_value = None
         mock_result = MagicMock()
@@ -79,7 +79,7 @@ def test_scan_reports_ingester_failure(tmp_path):
 
 
 def test_scan_reports_file_not_found():
-    """dgk scan reports error for non-existent file."""
+    """rei scan reports error for non-existent file."""
     runner = CliRunner()
     result = runner.invoke(cli, ["scan", "/nonexistent/file.ts"])
     assert result.exit_code == 0
@@ -87,7 +87,7 @@ def test_scan_reports_file_not_found():
 
 
 def test_scan_directory_scans_all_ts_files(tmp_path):
-    """dgk scan <dir> walks the directory and scans all TS/TSX files."""
+    """rei scan <dir> walks the directory and scans all TS/TSX files."""
     # Create project structure
     src = tmp_path / "src"
     src.mkdir()
@@ -95,16 +95,16 @@ def test_scan_directory_scans_all_ts_files(tmp_path):
     (src / "utils.tsx").write_text("export function helper() {}")
     (src / "readme.md").write_text("# docs")  # non-TS file, should be skipped
 
-    # Create .dgk/project.toml with include=["src"]
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    # Create .rei/project.toml with include=["src"]
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
 
@@ -128,7 +128,7 @@ def test_scan_directory_scans_all_ts_files(tmp_path):
 
 
 def test_scan_directory_respects_exclude_patterns(tmp_path):
-    """dgk scan <dir> respects exclude patterns from config."""
+    """rei scan <dir> respects exclude patterns from config."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
@@ -136,15 +136,15 @@ def test_scan_directory_respects_exclude_patterns(tmp_path):
     dist.mkdir()
     (dist / "bundle.ts").write_text("export function bundle() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src", "dist"]\nexclude = ["dist"]\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
 
@@ -167,15 +167,15 @@ def test_scan_directory_respects_exclude_patterns(tmp_path):
 
 
 def test_scan_directory_stores_resolved_import_paths(tmp_path):
-    """dgk scan <dir> stores IMPORTS relationships with resolved file paths, not raw specifiers."""
+    """rei scan <dir> stores IMPORTS relationships with resolved file paths, not raw specifiers."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "App.tsx").write_text("export function App() {}")
     (src / "utils.ts").write_text("export function helper() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -212,9 +212,9 @@ def test_scan_directory_stores_resolved_import_paths(tmp_path):
             result.stdout = utils_output
         return result
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_subprocess.run.side_effect = fake_run
@@ -242,14 +242,14 @@ def test_scan_directory_stores_resolved_import_paths(tmp_path):
 
 
 def test_scan_stores_package_nodes_and_depends_on(tmp_path):
-    """dgk scan stores Package nodes and DEPENDS_ON relationships for external imports."""
+    """rei scan stores Package nodes and DEPENDS_ON relationships for external imports."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "App.tsx").write_text("export function App() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -270,9 +270,9 @@ def test_scan_stores_package_nodes_and_depends_on(tmp_path):
         ],
     })
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -310,15 +310,15 @@ def test_scan_stores_package_nodes_and_depends_on(tmp_path):
 # ─── scan --changed ───────────────────────────────────────────────────────────
 
 def test_scan_changed_only_scans_git_modified_files(tmp_path):
-    """dgk scan --changed uses git diff to detect modified files and scans only those."""
+    """rei scan --changed uses git diff to detect modified files and scans only those."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "auth.ts").write_text("export function login() {}")
     (src / "utils.ts").write_text("export function helper() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -343,9 +343,9 @@ def test_scan_changed_only_scans_git_modified_files(tmp_path):
             return git_changed_result
         return ingester_result
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_subprocess.run.side_effect = fake_run
@@ -368,17 +368,17 @@ def test_scan_changed_only_scans_git_modified_files(tmp_path):
 
 
 def test_scan_changed_reports_no_changes_when_git_diff_empty(tmp_path):
-    """dgk scan --changed reports 'no changed files' when git diff returns nothing."""
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text('[project]\nname = "test"\n')
+    """rei scan --changed reports 'no changed files' when git diff returns nothing."""
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text('[project]\nname = "test"\n')
 
     git_result = MagicMock()
     git_result.returncode = 0
     git_result.stdout = ""
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls:
 
         mock_subprocess.run.return_value = git_result
         mock_client = MagicMock()
@@ -393,13 +393,13 @@ def test_scan_changed_reports_no_changes_when_git_diff_empty(tmp_path):
 
 
 def test_scan_changed_removes_nodes_for_deleted_files(tmp_path):
-    """dgk scan --changed deletes nodes for files removed in git diff (D status)."""
+    """rei scan --changed deletes nodes for files removed in git diff (D status)."""
     src = tmp_path / "src"
     src.mkdir()
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -408,10 +408,10 @@ def test_scan_changed_removes_nodes_for_deleted_files(tmp_path):
     git_result.returncode = 0
     git_result.stdout = "src/deleted.ts\n"
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find, \
-         patch("dgk_cli.commands.scan._get_deleted_files") as mock_deleted:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find, \
+         patch("rei_cli.commands.scan._get_deleted_files") as mock_deleted:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_deleted.return_value = ["src/deleted.ts"]
@@ -432,20 +432,20 @@ def test_scan_changed_removes_nodes_for_deleted_files(tmp_path):
 # ── Phase 1: progress bar + enriched summary ─────────────────────────────────
 
 def test_scan_directory_summary_contains_elapsed_time(tmp_path):
-    """dgk scan <dir> summary line includes elapsed time (e.g. 'Done in Xs')."""
+    """rei scan <dir> summary line includes elapsed time (e.g. 'Done in Xs')."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -471,21 +471,21 @@ def test_scan_directory_summary_contains_elapsed_time(tmp_path):
 # ── Phase 2: --verbose flag and warning collection ────────────────────────────
 
 def test_scan_directory_verbose_shows_per_file_detail(tmp_path):
-    """dgk scan <dir> --verbose prints a per-file detail line for each file."""
+    """rei scan <dir> --verbose prints a per-file detail line for each file."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "auth.ts").write_text("export function login() {}")
     (src / "utils.ts").write_text("export function helper() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -515,15 +515,15 @@ def test_scan_directory_verbose_short_flag(tmp_path):
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -544,15 +544,15 @@ def test_scan_directory_verbose_short_flag(tmp_path):
 
 
 def test_scan_directory_no_inline_warnings(tmp_path):
-    """dgk scan <dir> does not print warnings inline; they appear in summary section."""
+    """rei scan <dir> does not print warnings inline; they appear in summary section."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "good.ts").write_text("export function ok() {}")
     (src / "bad.ts").write_text("broken")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -571,9 +571,9 @@ def test_scan_directory_no_inline_warnings(tmp_path):
             return bad_result
         return good_result
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_subprocess.run.side_effect = fake_run
@@ -600,13 +600,13 @@ def test_scan_directory_no_inline_warnings(tmp_path):
 # ── Phase 3: single-file spinner, --changed path, edge cases ─────────────────
 
 def test_scan_single_file_output_contains_summary(tmp_path):
-    """dgk scan <single-file> output is non-empty and contains the enriched summary."""
+    """rei scan <single-file> output is non-empty and contains the enriched summary."""
     ts_file = tmp_path / "app.ts"
     ts_file.write_text("export function app() {}")
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -629,14 +629,14 @@ def test_scan_single_file_output_contains_summary(tmp_path):
 
 
 def test_scan_changed_summary_contains_elapsed_time(tmp_path):
-    """dgk scan --changed summary line includes elapsed time ('Done in Xs')."""
+    """rei scan --changed summary line includes elapsed time ('Done in Xs')."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "auth.ts").write_text("export function login() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -660,9 +660,9 @@ def test_scan_changed_summary_contains_elapsed_time(tmp_path):
             return git_changed_result
         return ingester_result
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_subprocess.run.side_effect = fake_run
@@ -682,14 +682,14 @@ def test_scan_changed_summary_contains_elapsed_time(tmp_path):
 
 
 def test_scan_changed_verbose_shows_per_file_detail(tmp_path):
-    """dgk scan --changed --verbose prints a per-file detail line."""
+    """rei scan --changed --verbose prints a per-file detail line."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "auth.ts").write_text("export function login() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -713,9 +713,9 @@ def test_scan_changed_verbose_shows_per_file_detail(tmp_path):
             return git_changed_result
         return ingester_result
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_subprocess.run.side_effect = fake_run
@@ -735,20 +735,20 @@ def test_scan_changed_verbose_shows_per_file_detail(tmp_path):
 
 
 def test_scan_empty_directory_prints_no_files_message(tmp_path):
-    """dgk scan <empty-dir> prints 'No TS/TSX files found to scan.' and exits cleanly."""
+    """rei scan <empty-dir> prints 'No TS/TSX files found to scan.' and exits cleanly."""
     # Empty src dir — no TS files
     src = tmp_path / "src"
     src.mkdir()
     (src / "readme.md").write_text("# docs")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_client = MagicMock()
@@ -763,21 +763,21 @@ def test_scan_empty_directory_prints_no_files_message(tmp_path):
 
 
 def test_scan_directory_non_tty_no_ansi(tmp_path):
-    """dgk scan <dir> with CliRunner (non-TTY / color=False) produces no ANSI sequences."""
+    """rei scan <dir> with CliRunner (non-TTY / color=False) produces no ANSI sequences."""
     import re
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -803,24 +803,24 @@ def test_scan_directory_non_tty_no_ansi(tmp_path):
 # ── Project-isolation Phase 2: TS ingester prefix + scan integration ──────────
 
 def test_scan_passes_project_prefix_to_ingester(tmp_path):
-    """dgk scan <dir> passes --project-prefix <hash> to the TS ingester subprocess."""
+    """rei scan <dir> passes --project-prefix <hash> to the TS ingester subprocess."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    from dgk_core.hashing import project_hash
+    from rei_core.hashing import project_hash
 
     expected_prefix = project_hash(str(tmp_path.resolve()))
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -846,22 +846,22 @@ def test_scan_passes_project_prefix_to_ingester(tmp_path):
 
 
 def test_scan_constructs_neo4j_client_with_project_id(tmp_path):
-    """dgk scan <dir> constructs Neo4jClient with the resolved project_id."""
+    """rei scan <dir> constructs Neo4jClient with the resolved project_id."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
     expected_project_id = str(tmp_path.resolve())
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -883,17 +883,17 @@ def test_scan_constructs_neo4j_client_with_project_id(tmp_path):
 
 
 def test_scan_auto_inits_project_toml_when_missing(tmp_path):
-    """dgk scan <dir> auto-creates .dgk/project.toml when it doesn't exist."""
+    """rei scan <dir> auto-creates .rei/project.toml when it doesn't exist."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    # Deliberately do NOT create .dgk/project.toml
-    assert not (tmp_path / ".dgk" / "project.toml").exists()
+    # Deliberately do NOT create .rei/project.toml
+    assert not (tmp_path / ".rei" / "project.toml").exists()
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -910,8 +910,8 @@ def test_scan_auto_inits_project_toml_when_missing(tmp_path):
         result = runner.invoke(cli, ["scan", str(tmp_path)])
 
         assert result.exit_code == 0
-        # .dgk/project.toml should have been auto-created
-        config_path = tmp_path / ".dgk" / "project.toml"
+        # .rei/project.toml should have been auto-created
+        config_path = tmp_path / ".rei" / "project.toml"
         assert config_path.exists()
 
         # It should contain the project id (absolute path)
@@ -922,17 +922,17 @@ def test_scan_auto_inits_project_toml_when_missing(tmp_path):
 
 
 def test_scan_single_file_passes_project_prefix(tmp_path):
-    """dgk scan <file> also passes --project-prefix to the ingester."""
+    """rei scan <file> also passes --project-prefix to the ingester."""
     ts_file = tmp_path / "app.ts"
     ts_file.write_text("export function app() {}")
 
-    from dgk_core.hashing import project_hash
+    from rei_core.hashing import project_hash
 
     expected_prefix = project_hash(str(tmp_path.resolve()))
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -957,18 +957,18 @@ def test_scan_single_file_passes_project_prefix(tmp_path):
 
 
 def test_scan_changed_passes_project_prefix_and_project_id(tmp_path):
-    """dgk scan --changed passes project prefix to ingester and project_id to Neo4jClient."""
+    """rei scan --changed passes project prefix to ingester and project_id to Neo4jClient."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "auth.ts").write_text("export function login() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    from dgk_core.hashing import project_hash
+    from rei_core.hashing import project_hash
 
     expected_prefix = project_hash(str(tmp_path.resolve()))
     expected_project_id = str(tmp_path.resolve())
@@ -993,9 +993,9 @@ def test_scan_changed_passes_project_prefix_and_project_id(tmp_path):
             return git_changed_result
         return ingester_result
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_subprocess.run.side_effect = fake_run
@@ -1022,14 +1022,14 @@ def test_scan_changed_passes_project_prefix_and_project_id(tmp_path):
 # ── Project-isolation Phase 3: Repeat-scan detection + incremental auto-switch ──
 
 def test_scan_known_project_prints_warning_and_runs_incremental(tmp_path):
-    """dgk scan <dir> on a known project prints a warning and switches to incremental scan."""
+    """rei scan <dir> on a known project prints a warning and switches to incremental scan."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -1057,9 +1057,9 @@ def test_scan_known_project_prints_warning_and_runs_incremental(tmp_path):
             return git_log_result
         return ingester_result
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_subprocess.run.side_effect = fake_run
@@ -1087,20 +1087,20 @@ def test_scan_known_project_prints_warning_and_runs_incremental(tmp_path):
 
 
 def test_scan_known_project_force_does_full_rescan(tmp_path):
-    """dgk scan <dir> --force on a known project bypasses incremental and does a full scan."""
+    """rei scan <dir> --force on a known project bypasses incremental and does a full scan."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -1128,20 +1128,20 @@ def test_scan_known_project_force_does_full_rescan(tmp_path):
 
 
 def test_scan_first_time_no_warning(tmp_path):
-    """dgk scan <dir> on a first-time project does a full scan with no warning."""
+    """rei scan <dir> on a first-time project does a full scan with no warning."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -1169,20 +1169,20 @@ def test_scan_first_time_no_warning(tmp_path):
 
 
 def test_scan_updates_last_scanned_at_after_success(tmp_path):
-    """dgk scan <dir> updates last_scanned_at on the Project node after successful scan."""
+    """rei scan <dir> updates last_scanned_at on the Project node after successful scan."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_result = MagicMock()
@@ -1205,14 +1205,14 @@ def test_scan_updates_last_scanned_at_after_success(tmp_path):
 
 
 def test_scan_known_project_no_changes_since_last_scan(tmp_path):
-    """dgk scan <dir> on known project with no changes since last scan reports no changes."""
+    """rei scan <dir> on known project with no changes since last scan reports no changes."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "app.ts").write_text("export function app() {}")
 
-    dgk = tmp_path / ".dgk"
-    dgk.mkdir()
-    (dgk / "project.toml").write_text(
+    rei = tmp_path / ".rei"
+    rei.mkdir()
+    (rei / "project.toml").write_text(
         '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
     )
 
@@ -1223,9 +1223,9 @@ def test_scan_known_project_no_changes_since_last_scan(tmp_path):
     git_empty_result.returncode = 0
     git_empty_result.stdout = ""
 
-    with patch("dgk_cli.commands.scan.subprocess") as mock_subprocess, \
-         patch("dgk_cli.commands.scan.Neo4jClient") as mock_client_cls, \
-         patch("dgk_cli.commands.scan._find_ingester") as mock_find:
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
 
         mock_find.return_value = Path("/fake/cli.js")
         mock_subprocess.run.return_value = git_empty_result
@@ -1245,7 +1245,7 @@ def test_scan_known_project_no_changes_since_last_scan(tmp_path):
 
 
 def test_scan_force_flag_documented_in_help():
-    """--force flag is documented in dgk scan --help output."""
+    """--force flag is documented in rei scan --help output."""
     runner = CliRunner()
     result = runner.invoke(cli, ["scan", "--help"])
     assert "--force" in result.output

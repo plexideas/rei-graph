@@ -17,7 +17,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (!filePath) {
-  console.error("Usage: dgk-parse-ts <file> [--project-prefix <hash>]");
+  console.error("Usage: rei-parse-ts <file> [--project-prefix <hash>]");
   process.exit(1);
 }
 

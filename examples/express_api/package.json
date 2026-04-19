@@ -2,7 +2,7 @@
     "name": "express-api",
     "version": "1.0.0",
     "private": true,
-    "description": "Demo Express API — dev-graph-kit scan target",
+    "description": "Demo Express API — rei-graph scan target",
     "scripts": {
         "typecheck": "tsc --noEmit"
     },

@@ -3,12 +3,12 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from dgk_cli.main import cli
+from rei_cli.main import cli
 
 
 def test_plan_creates_plan_and_shows_id():
-    """dgk plan <goal> <step>... creates a DAG plan and echoes the plan ID."""
-    with patch("dgk_cli.commands.plan.DagClient") as mock_cls:
+    """rei plan <goal> <step>... creates a DAG plan and echoes the plan ID."""
+    with patch("rei_cli.commands.plan.DagClient") as mock_cls:
         mock_dag = MagicMock()
         mock_cls.return_value = mock_dag
         mock_dag.create_plan.return_value = "plan:abc123"
@@ -25,15 +25,15 @@ def test_plan_creates_plan_and_shows_id():
 
 
 def test_plan_requires_at_least_one_step():
-    """dgk plan <goal> with no steps should fail."""
+    """rei plan <goal> with no steps should fail."""
     runner = CliRunner()
     result = runner.invoke(cli, ["plan", "refactor auth"])
     assert result.exit_code != 0
 
 
 def test_plans_lists_open_plans():
-    """dgk plans shows pending/running plans."""
-    with patch("dgk_cli.commands.plan.DagClient") as mock_cls:
+    """rei plans shows pending/running plans."""
+    with patch("rei_cli.commands.plan.DagClient") as mock_cls:
         mock_dag = MagicMock()
         mock_cls.return_value = mock_dag
         mock_dag.list_open_plans.return_value = [
@@ -50,8 +50,8 @@ def test_plans_lists_open_plans():
 
 
 def test_plans_shows_message_when_no_open_plans():
-    """dgk plans shows 'no open plans' when list is empty."""
-    with patch("dgk_cli.commands.plan.DagClient") as mock_cls:
+    """rei plans shows 'no open plans' when list is empty."""
+    with patch("rei_cli.commands.plan.DagClient") as mock_cls:
         mock_dag = MagicMock()
         mock_cls.return_value = mock_dag
         mock_dag.list_open_plans.return_value = []
@@ -67,16 +67,16 @@ def test_plans_shows_message_when_no_open_plans():
 # ─── Project scoping ─────────────────────────────────────────────────────────
 
 def test_plan_resolves_project_id(tmp_path):
-    """dgk plan resolves the current directory as project_id and passes it to DagClient."""
-    # Create a .dgk/project.toml with a project id
-    dgk_dir = tmp_path / ".dgk"
-    dgk_dir.mkdir()
-    (dgk_dir / "project.toml").write_text(
+    """rei plan resolves the current directory as project_id and passes it to DagClient."""
+    # Create a .rei/project.toml with a project id
+    rei_dir = tmp_path / ".rei"
+    rei_dir.mkdir()
+    (rei_dir / "project.toml").write_text(
         '[project]\nid = "/home/user/myproject"\n'
     )
 
-    with patch("dgk_cli.commands.plan.DagClient") as mock_cls, \
-         patch("dgk_cli.commands.plan._resolve_project_id", return_value="/home/user/myproject"):
+    with patch("rei_cli.commands.plan.DagClient") as mock_cls, \
+         patch("rei_cli.commands.plan._resolve_project_id", return_value="/home/user/myproject"):
         mock_dag = MagicMock()
         mock_cls.return_value = mock_dag
         mock_dag.create_plan.return_value = "plan:abc123"
@@ -91,9 +91,9 @@ def test_plan_resolves_project_id(tmp_path):
 
 
 def test_plans_resolves_project_id():
-    """dgk plans resolves the current directory as project_id and passes it to DagClient."""
-    with patch("dgk_cli.commands.plan.DagClient") as mock_cls, \
-         patch("dgk_cli.commands.plan._resolve_project_id", return_value="/home/user/myproject"):
+    """rei plans resolves the current directory as project_id and passes it to DagClient."""
+    with patch("rei_cli.commands.plan.DagClient") as mock_cls, \
+         patch("rei_cli.commands.plan._resolve_project_id", return_value="/home/user/myproject"):
         mock_dag = MagicMock()
         mock_cls.return_value = mock_dag
         mock_dag.list_open_plans.return_value = []

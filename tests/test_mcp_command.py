@@ -1,13 +1,13 @@
-"""Tests for the dgk mcp command."""
+"""Tests for the rei mcp command."""
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from dgk_cli.main import cli
+from rei_cli.main import cli
 
 
 def test_mcp_command_is_registered():
-    """dgk mcp command exists and shows help without error."""
+    """rei mcp command exists and shows help without error."""
     runner = CliRunner()
     result = runner.invoke(cli, ["mcp", "--help"])
     assert result.exit_code == 0
@@ -15,10 +15,10 @@ def test_mcp_command_is_registered():
 
 
 def test_mcp_command_launches_server_process():
-    """dgk mcp starts the dgk_mcp module as a subprocess."""
+    """rei mcp starts the rei_mcp module as a subprocess."""
     import sys
 
-    with patch("dgk_cli.commands.mcp.subprocess") as mock_subprocess:
+    with patch("rei_cli.commands.mcp.subprocess") as mock_subprocess:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_subprocess.run.return_value = mock_result
@@ -30,4 +30,4 @@ def test_mcp_command_launches_server_process():
         call_args = mock_subprocess.run.call_args[0][0]
         assert call_args[0] == sys.executable
         assert "-m" in call_args
-        assert "dgk_mcp" in call_args
+        assert "rei_mcp" in call_args
