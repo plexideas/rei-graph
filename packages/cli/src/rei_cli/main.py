@@ -1,3 +1,5 @@
+import importlib.metadata
+
 import click
 
 from rei_cli.commands.delete_project import delete_project
@@ -13,6 +15,10 @@ from rei_cli.commands.snapshot import snapshot
 
 
 @click.group()
+@click.version_option(
+    version=importlib.metadata.version("rei-cli"),
+    prog_name="rei",
+)
 def cli():
     """rei-graph: Local graph memory for coding agents."""
     pass
