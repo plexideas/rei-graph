@@ -71,13 +71,13 @@ Differentiate first-run from repeat-run output. On first run (no `.rei/project.t
 
 ### Acceptance criteria
 
-- [ ] First scan shows `✓ Initialized project: <name> (.rei/project.toml created)`
-- [ ] First scan shows next-step suggestions block after the summary
-- [ ] Repeat scan shows `✓ Project: <name>` (no "Initialized")
-- [ ] Repeat scan does not show next-step suggestions
-- [ ] Corrupt `.rei/project.toml` triggers a warning, regenerates defaults, and scan continues
-- [ ] First-run detection uses `last_scanned_at` from the project node (None = first run)
-- [ ] Tests verify first-run vs repeat-run output, next-step presence/absence, and corrupt config recovery
+- [x] First scan shows `✓ Initialized project: <name> (.rei/project.toml created)`
+- [x] First scan shows next-step suggestions block after the summary
+- [x] Repeat scan shows `✓ Project: <name>` (no "Initialized")
+- [x] Repeat scan does not show next-step suggestions
+- [x] Corrupt `.rei/project.toml` triggers a warning, regenerates defaults, and scan continues
+- [x] First-run detection uses `last_scanned_at` from the project node (None = first run)
+- [x] Tests verify first-run vs repeat-run output, next-step presence/absence, and corrupt config recovery
 
 ---
 
