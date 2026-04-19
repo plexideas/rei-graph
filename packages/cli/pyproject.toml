@@ -14,6 +14,7 @@ rei = "rei_cli.main:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rei_cli"]
+# _ingester/ is populated by scripts/bundle_ingester.sh before building the wheel
 
 [tool.uv.sources]
 rei-core = { workspace = true }

@@ -1254,3 +1254,51 @@ def test_scan_force_flag_documented_in_help():
     runner = CliRunner()
     result = runner.invoke(cli, ["scan", "--help"])
     assert "--force" in result.output
+
+
+# ── Phase 2 (app-installation): _find_ingester bundled vs dev path discovery ──
+
+def test_find_ingester_returns_bundled_path_when_present(tmp_path):
+    """_find_ingester() returns the bundled ingester inside the package when it exists."""
+    from rei_cli.commands.scan import _find_ingester
+
+    # Simulate the bundled ingester sitting next to scan.py inside an installed package
+    fake_package_ingester = tmp_path / "_ingester" / "cli.js"
+    fake_package_ingester.parent.mkdir(parents=True)
+    fake_package_ingester.write_text("// bundled")
+
+    with patch("rei_cli.commands.scan.Path") as mock_path_cls:
+        # Make __file__-relative lookup point to our tmp_path
+        scan_file_mock = MagicMock()
+        scan_file_mock.resolve.return_value = tmp_path / "scan.py"
+        mock_path_cls.return_value = scan_file_mock
+        # We need the real Path for Path.cwd() to not break — use a targeted patch instead
+        pass
+
+    # Directly test: patch __file__ parent to point to tmp_path
+    import rei_cli.commands.scan as scan_module
+    with patch.object(scan_module, "_PACKAGE_INGESTER_PATH", fake_package_ingester):
+        result = _find_ingester()
+    assert result == fake_package_ingester
+
+
+def test_find_ingester_falls_back_to_dev_path_when_bundled_absent(tmp_path):
+    """_find_ingester() falls back to packages/ingester_ts/dist/cli.js when no bundled ingester."""
+    from rei_cli.commands.scan import _find_ingester
+
+    # Create a fake dev-layout ingester path
+    dev_cli = tmp_path / "packages" / "ingester_ts" / "dist" / "cli.js"
+    dev_cli.parent.mkdir(parents=True)
+    dev_cli.write_text("// dev")
+
+    import rei_cli.commands.scan as scan_module
+
+    # Bundled path does not exist
+    nonexistent_bundle = tmp_path / "_ingester" / "cli.js"
+    assert not nonexistent_bundle.exists()
+
+    with patch.object(scan_module, "_PACKAGE_INGESTER_PATH", nonexistent_bundle), \
+         patch("rei_cli.commands.scan.Path.cwd", return_value=tmp_path):
+        result = _find_ingester()
+
+    assert result == dev_cli

@@ -7,6 +7,9 @@ build/
 *.egg
 .venv/
 
+# Generated build artifacts
+packages/cli/src/rei_cli/_ingester/
+
 
 # Environment
 .env

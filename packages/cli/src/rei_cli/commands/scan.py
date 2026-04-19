@@ -13,9 +13,20 @@ from rei_cli.progress import ScanProgress
 
 TS_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx"}
 
+# Path to the ingester bundled inside the installed package (populated at build time)
+_PACKAGE_INGESTER_PATH: Path = Path(__file__).resolve().parent / "_ingester" / "cli.js"
+
 
 def _find_ingester() -> Path:
-    """Find the TS ingester dist/cli.js relative to the project."""
+    """Find the TS ingester dist/cli.js.
+
+    Discovery order:
+    1. Bundled ingester inside the installed package (``_ingester/cli.js`` next to this file)
+    2. Development path relative to the project root (``packages/ingester_ts/dist/cli.js``)
+    """
+    if _PACKAGE_INGESTER_PATH.exists():
+        return _PACKAGE_INGESTER_PATH
+
     candidates = [
         Path.cwd() / "packages" / "ingester_ts" / "dist" / "cli.js",
     ]
