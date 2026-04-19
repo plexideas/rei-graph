@@ -121,8 +121,8 @@ Rewrite the installation section of `README.md` with Homebrew as the primary met
 
 ### Acceptance criteria
 
-- [ ] `README.md` installation section shows Homebrew as primary, pipx as fallback
-- [ ] `setup.sh` is documented as the contributor workflow, not the end-user path
-- [ ] `docs/install.md` covers: install, verify, update, troubleshoot
-- [ ] Platform-specific notes for macOS and Linux are included
-- [ ] No references to `uv run rei` as the primary usage pattern in user-facing docs
+- [x] `README.md` installation section shows Homebrew as primary, pipx as fallback
+- [x] `setup.sh` is documented as the contributor workflow, not the end-user path
+- [x] `docs/install.md` covers: install, verify, update, troubleshoot
+- [x] Platform-specific notes for macOS and Linux are included
+- [x] No references to `uv run rei` as the primary usage pattern in user-facing docs

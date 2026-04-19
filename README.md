@@ -20,9 +20,25 @@ A local-first MCP-compatible developer memory system that turns a codebase, arch
 
 Modern AI coding agents (Codex, Claude Code, Cursor) lack persistent, structured memory about the codebase they work with. Each session starts from scratch — agents re-discover architecture, re-analyze dependencies, and lose context about past decisions and changes.
 
-## How to start
+## Installation
 
-### One-command setup
+### macOS / Linux — Homebrew (recommended)
+
+```bash
+brew install plexideas/tap/rei-graph
+```
+
+`rei` is globally available immediately. No Python, Node.js, or virtualenv setup required.
+
+### Fallback — pipx
+
+```bash
+pipx install rei-graph
+```
+
+### Contributors — clone and bootstrap
+
+If you want to work on rei-graph itself, use the dev bootstrap instead:
 
 ```bash
 git clone https://github.com/org/rei-graph.git
@@ -30,39 +46,41 @@ cd rei-graph
 ./setup.sh
 ```
 
-### Manual setup
+See [docs/install.md](docs/install.md) for full installation details, verification steps, and troubleshooting.
 
-**Prerequisites:** Docker, [uv](https://docs.astral.sh/uv), Node.js 18+
+## Getting started
+
+**Prerequisites:** Docker (for Neo4j)
 
 ```bash
-git clone https://github.com/org/rei-graph.git
-cd rei-graph
-cp .env.example .env
-uv sync
-cd packages/ingester_ts && npm install && cd ../...
-docker compose up -d
-uv run rei init
-uv run rei doctor
+# Start Neo4j
+rei dev start
+
+# Initialize your project
+rei init
+
+# Verify everything is healthy
+rei doctor
 ```
 
 ### Scan your first project
 
 ```bash
 # Scan the built-in React demo
-uv run rei scan examples/react_ts_app
+rei scan examples/react_ts_app
 
 # Query the graph
-uv run rei query "LoginForm"
+rei query "LoginForm"
 
 # Impact analysis
-uv run rei impact examples/react_ts_app/src/hooks.ts
+rei impact examples/react_ts_app/src/hooks.ts
 ```
 
 ### Connect an agent
 
 ```bash
 # Start the MCP server (agents spawn this automatically)
-uv run rei mcp
+rei mcp
 ```
 
 See [docs/mcp.md](docs/mcp.md) for agent configuration (Cursor, Claude Code, Codex).
@@ -82,6 +100,8 @@ See [docs/mcp.md](docs/mcp.md) for agent configuration (Cursor, Claude Code, Cod
 | `rei snapshot` | Export current graph to JSON |
 | `rei mcp` | Start MCP server for agent connections |
 | `rei doctor` | Check Neo4j and ingester health |
+| `rei update` | Update rei-graph to the latest version |
+| `rei --version` | Show the installed version |
 
 ## Services
 
