@@ -721,3 +721,137 @@ class TestPhase7ToolsRegistered:
     def test_project_snapshot_in_tools(self):
         assert "project.snapshot" in {t.name for t in TOOLS}
 
+
+# ─── Phase 6: Multi-project MCP ──────────────────────────────────────────────
+
+from dgk_mcp.server import _get_project_clients, _client_cache
+
+
+class TestPhase6AllToolsRequireProjectId:
+    def test_all_tools_have_project_id_property(self):
+        """Every tool's inputSchema has a project_id property."""
+        for tool in TOOLS:
+            props = tool.inputSchema.get("properties", {})
+            assert "project_id" in props, f"{tool.name} missing project_id property"
+
+    def test_all_tools_require_project_id(self):
+        """Every tool lists project_id in required fields."""
+        for tool in TOOLS:
+            required = tool.inputSchema.get("required", [])
+            assert "project_id" in required, f"{tool.name} does not require project_id"
+
+
+class TestPhase6LazyClientCache:
+    def test_get_project_clients_creates_scoped_neo4j_client(self):
+        """_get_project_clients creates Neo4jClient with correct project_id."""
+        from unittest.mock import patch
+        from dgk_mcp.server import _get_project_clients
+
+        with patch("dgk_mcp.server.Neo4jClient") as MockNeo4j, \
+             patch("dgk_mcp.server.MemoryClient"), \
+             patch("dgk_mcp.server.DagClient"), \
+             patch("dgk_mcp.server._client_cache", {}):
+            _get_project_clients("/project/alpha")
+            MockNeo4j.assert_called_once_with(project_id="/project/alpha")
+
+    def test_get_project_clients_reuses_cached_instance(self):
+        """_get_project_clients returns same instance on repeated calls."""
+        from unittest.mock import MagicMock, patch
+        from dgk_mcp.server import _get_project_clients
+
+        fake_clients = MagicMock()
+        cache = {"/project/alpha": fake_clients}
+        with patch("dgk_mcp.server._client_cache", cache):
+            result = _get_project_clients("/project/alpha")
+        assert result is fake_clients
+
+    def test_different_project_ids_get_different_cached_clients(self):
+        """_get_project_clients creates separate entries for different project_ids."""
+        from unittest.mock import patch
+        from dgk_mcp.server import _get_project_clients
+
+        with patch("dgk_mcp.server.Neo4jClient") as MockNeo4j, \
+             patch("dgk_mcp.server.MemoryClient"), \
+             patch("dgk_mcp.server.DagClient"), \
+             patch("dgk_mcp.server._client_cache", {}):
+            _get_project_clients("/project/alpha")
+            _get_project_clients("/project/beta")
+            assert MockNeo4j.call_count == 2
+            calls = [c.kwargs["project_id"] for c in MockNeo4j.call_args_list]
+            assert "/project/alpha" in calls
+            assert "/project/beta" in calls
+
+    def test_memory_client_created_with_project_id(self):
+        """_get_project_clients creates MemoryClient with correct project_id."""
+        from unittest.mock import patch
+        from dgk_mcp.server import _get_project_clients
+
+        with patch("dgk_mcp.server.Neo4jClient"), \
+             patch("dgk_mcp.server.MemoryClient") as MockMem, \
+             patch("dgk_mcp.server.DagClient"), \
+             patch("dgk_mcp.server._client_cache", {}):
+            _get_project_clients("/project/alpha")
+            MockMem.assert_called_once_with(project_id="/project/alpha")
+
+    def test_dag_client_created_with_project_id(self):
+        """_get_project_clients creates DagClient with correct project_id."""
+        from unittest.mock import patch
+        from dgk_mcp.server import _get_project_clients
+
+        with patch("dgk_mcp.server.Neo4jClient"), \
+             patch("dgk_mcp.server.MemoryClient"), \
+             patch("dgk_mcp.server.DagClient") as MockDag, \
+             patch("dgk_mcp.server._client_cache", {}):
+            _get_project_clients("/project/alpha")
+            MockDag.assert_called_once_with(project_id="/project/alpha")
+
+
+class TestPhase6ScopedToolHandlers:
+    def test_search_entities_isolation_across_projects(self):
+        """search_entities called with different scoped clients returns isolated results."""
+        mock_client_a = MagicMock()
+        mock_client_a.search_nodes.return_value = [{"n": {"id": "fn:a", "name": "funcA"}}]
+        mock_client_b = MagicMock()
+        mock_client_b.search_nodes.return_value = []
+
+        result_a = search_entities({"query": "func", "project_id": "/project/alpha"}, mock_client_a)
+        result_b = search_entities({"query": "func", "project_id": "/project/beta"}, mock_client_b)
+
+        assert len(result_a["entities"]) == 1
+        assert len(result_b["entities"]) == 0
+
+    def test_memory_get_recent_context_isolation(self):
+        """memory_get_recent_context with different scoped clients returns isolated results."""
+        mock_mem_a = MagicMock()
+        mock_mem_a.get_recent_context.return_value = [{"type": "Analysis", "scope": "auth"}]
+        mock_mem_b = MagicMock()
+        mock_mem_b.get_recent_context.return_value = []
+
+        result_a = memory_get_recent_context({"query": "auth", "project_id": "/project/alpha"}, mock_mem_a)
+        result_b = memory_get_recent_context({"query": "auth", "project_id": "/project/beta"}, mock_mem_b)
+
+        assert len(result_a["memories"]) == 1
+        assert len(result_b["memories"]) == 0
+
+    def test_project_snapshot_uses_scoped_snapshot_client(self, tmp_path):
+        """project_snapshot creates SnapshotClient with the given project_id."""
+        from unittest.mock import patch
+
+        mock_client = MagicMock()
+        mock_client.save_snapshot.return_value = "/snap/path.json"
+
+        with patch("dgk_mcp.server.SnapshotClient", return_value=mock_client) as MockSnap:
+            project_snapshot({"snapshot_dir": str(tmp_path), "project_id": "/project/alpha"})
+
+        MockSnap.assert_called_once_with(project_id="/project/alpha")
+
+    def test_scan_tools_have_project_id_in_schema(self):
+        """scan.project, scan.file, scan.changed_files each have project_id in schema."""
+        tool_map = {t.name: t for t in TOOLS}
+        for tool_name in ("scan.project", "scan.file", "scan.changed_files"):
+            tool = tool_map[tool_name]
+            assert "project_id" in tool.inputSchema.get("properties", {}), \
+                f"{tool_name} missing project_id"
+            assert "project_id" in tool.inputSchema.get("required", []), \
+                f"{tool_name} does not require project_id"
+

@@ -16,6 +16,32 @@ from dgk_storage.snapshot_client import SnapshotClient
 server = Server("dev-graph-kit")
 
 
+# ─── Per-project client cache ──────────────────────────────────────────────────
+
+from dataclasses import dataclass
+
+
+@dataclass
+class _ProjectClients:
+    neo4j: Neo4jClient
+    memory: MemoryClient
+    dag: DagClient
+
+
+_client_cache: dict[str, _ProjectClients] = {}
+
+
+def _get_project_clients(project_id: str) -> _ProjectClients:
+    """Return cached scoped clients for the given project_id (lazy creation)."""
+    if project_id not in _client_cache:
+        _client_cache[project_id] = _ProjectClients(
+            neo4j=Neo4jClient(project_id=project_id),
+            memory=MemoryClient(project_id=project_id),
+            dag=DagClient(project_id=project_id),
+        )
+    return _client_cache[project_id]
+
+
 # ─── Pure sync helpers (testable) ─────────────────────────────────────────────
 
 def search_entities(arguments: dict, client: Neo4jClient) -> dict:
@@ -132,15 +158,15 @@ def project_snapshot(arguments: dict) -> dict:
     from pathlib import Path
 
     snapshot_dir = arguments.get("snapshot_dir")
-    project_id = arguments.get("project_id", "default")
+    project_id = arguments.get("project_id")
     if snapshot_dir is None:
         snapshot_dir = Path.home() / ".dev-graph-kit" / "snapshots"
     else:
         snapshot_dir = Path(snapshot_dir)
 
-    client = SnapshotClient()
+    client = SnapshotClient(project_id=project_id)
     try:
-        path = client.save_snapshot(snapshot_dir, project_id)
+        path = client.save_snapshot(snapshot_dir, project_id or "default")
     finally:
         client.close()
 
@@ -298,6 +324,8 @@ def get_open_plans(dag: DagClient) -> str:
 
 # ─── TOOL / RESOURCE definitions ──────────────────────────────────────────────
 
+_PROJECT_ID_PROP = {"project_id": {"type": "string", "description": "Canonical absolute path of the project root"}}
+
 TOOLS: list[Tool] = [
     Tool(
         name="graph.search_entities",
@@ -308,8 +336,9 @@ TOOLS: list[Tool] = [
                 "query": {"type": "string"},
                 "labels": {"type": "array", "items": {"type": "string"}},
                 "limit": {"type": "integer", "default": 20},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["query"],
+            "required": ["query", "project_id"],
         },
     ),
     Tool(
@@ -320,8 +349,9 @@ TOOLS: list[Tool] = [
             "properties": {
                 "query": {"type": "string"},
                 "limit": {"type": "integer", "default": 20},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["query"],
+            "required": ["query", "project_id"],
         },
     ),
     Tool(
@@ -334,8 +364,9 @@ TOOLS: list[Tool] = [
                 "direction": {"type": "string", "enum": ["in", "out", "both"]},
                 "types": {"type": "array", "items": {"type": "string"}},
                 "depth": {"type": "integer", "default": 1},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["nodeId"],
+            "required": ["nodeId", "project_id"],
         },
     ),
     Tool(
@@ -343,8 +374,11 @@ TOOLS: list[Tool] = [
         description="Analyze impact of changes to a file",
         inputSchema={
             "type": "object",
-            "properties": {"target": {"type": "string"}},
-            "required": ["target"],
+            "properties": {
+                "target": {"type": "string"},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["target", "project_id"],
         },
     ),
     Tool(
@@ -352,8 +386,11 @@ TOOLS: list[Tool] = [
         description="Create or update nodes in the code graph",
         inputSchema={
             "type": "object",
-            "properties": {"entities": {"type": "array"}},
-            "required": ["entities"],
+            "properties": {
+                "entities": {"type": "array"},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["entities", "project_id"],
         },
     ),
     Tool(
@@ -361,8 +398,11 @@ TOOLS: list[Tool] = [
         description="Create or update relationships",
         inputSchema={
             "type": "object",
-            "properties": {"relations": {"type": "array"}},
-            "required": ["relations"],
+            "properties": {
+                "relations": {"type": "array"},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["relations", "project_id"],
         },
     ),
     Tool(
@@ -370,7 +410,11 @@ TOOLS: list[Tool] = [
         description="Full project scan",
         inputSchema={
             "type": "object",
-            "properties": {"path": {"type": "string", "default": "."}},
+            "properties": {
+                "path": {"type": "string", "default": "."},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["project_id"],
         },
     ),
     Tool(
@@ -378,8 +422,11 @@ TOOLS: list[Tool] = [
         description="Scan a single file",
         inputSchema={
             "type": "object",
-            "properties": {"path": {"type": "string"}},
-            "required": ["path"],
+            "properties": {
+                "path": {"type": "string"},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["path", "project_id"],
         },
     ),
     Tool(
@@ -387,7 +434,11 @@ TOOLS: list[Tool] = [
         description="Incrementally scan only git-changed TypeScript/TSX files",
         inputSchema={
             "type": "object",
-            "properties": {"path": {"type": "string", "default": "."}},
+            "properties": {
+                "path": {"type": "string", "default": "."},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["project_id"],
         },
     ),
     Tool(
@@ -397,14 +448,19 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "snapshot_dir": {"type": "string"},
-                "project_id": {"type": "string", "default": "default"},
+                **_PROJECT_ID_PROP,
             },
+            "required": ["project_id"],
         },
     ),
     Tool(
         name="project.status",
         description="Get project status — graph stats and service health",
-        inputSchema={"type": "object", "properties": {}},
+        inputSchema={
+            "type": "object",
+            "properties": {**_PROJECT_ID_PROP},
+            "required": ["project_id"],
+        },
     ),
     Tool(
         name="memory.record_analysis",
@@ -415,8 +471,9 @@ TOOLS: list[Tool] = [
                 "scope": {"type": "string"},
                 "findings": {"type": "string"},
                 "relatedNodes": {"type": "array", "items": {"type": "string"}},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["scope", "findings"],
+            "required": ["scope", "findings", "project_id"],
         },
     ),
     Tool(
@@ -429,8 +486,9 @@ TOOLS: list[Tool] = [
                 "choice": {"type": "string"},
                 "rationale": {"type": "string"},
                 "basedOn": {"type": "array", "items": {"type": "string"}},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["context", "choice", "rationale"],
+            "required": ["context", "choice", "rationale", "project_id"],
         },
     ),
     Tool(
@@ -442,8 +500,9 @@ TOOLS: list[Tool] = [
                 "type": {"type": "string", "enum": ["refactor", "feature", "fix", "chore"]},
                 "description": {"type": "string"},
                 "affectedFiles": {"type": "array", "items": {"type": "string"}},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["type", "description"],
+            "required": ["type", "description", "project_id"],
         },
     ),
     Tool(
@@ -456,8 +515,9 @@ TOOLS: list[Tool] = [
                 "status": {"type": "string", "enum": ["passed", "failed"]},
                 "details": {"type": "string"},
                 "validates": {"type": "string"},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["type", "status", "details"],
+            "required": ["type", "status", "details", "project_id"],
         },
     ),
     Tool(
@@ -469,8 +529,9 @@ TOOLS: list[Tool] = [
                 "goal": {"type": "string"},
                 "steps": {"type": "array", "items": {"type": "string"}},
                 "targets": {"type": "array", "items": {"type": "string"}},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["goal", "steps"],
+            "required": ["goal", "steps", "project_id"],
         },
     ),
     Tool(
@@ -481,8 +542,9 @@ TOOLS: list[Tool] = [
             "properties": {
                 "query": {"type": "string"},
                 "limit": {"type": "integer", "default": 10},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["query"],
+            "required": ["query", "project_id"],
         },
     ),
     Tool(
@@ -494,8 +556,9 @@ TOOLS: list[Tool] = [
                 "goal": {"type": "string"},
                 "steps": {"type": "array", "items": {"type": "string"}},
                 "targets": {"type": "array", "items": {"type": "string"}},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["goal", "steps"],
+            "required": ["goal", "steps", "project_id"],
         },
     ),
     Tool(
@@ -503,8 +566,11 @@ TOOLS: list[Tool] = [
         description="Start executing a plan",
         inputSchema={
             "type": "object",
-            "properties": {"planId": {"type": "string"}},
-            "required": ["planId"],
+            "properties": {
+                "planId": {"type": "string"},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["planId", "project_id"],
         },
     ),
     Tool(
@@ -512,8 +578,11 @@ TOOLS: list[Tool] = [
         description="Get plan details and step statuses",
         inputSchema={
             "type": "object",
-            "properties": {"planId": {"type": "string"}},
-            "required": ["planId"],
+            "properties": {
+                "planId": {"type": "string"},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["planId", "project_id"],
         },
     ),
     Tool(
@@ -524,8 +593,9 @@ TOOLS: list[Tool] = [
             "properties": {
                 "planId": {"type": "string"},
                 "stepName": {"type": "string"},
+                **_PROJECT_ID_PROP,
             },
-            "required": ["planId", "stepName"],
+            "required": ["planId", "stepName", "project_id"],
         },
     ),
     Tool(
@@ -533,8 +603,11 @@ TOOLS: list[Tool] = [
         description="Cancel a running or pending plan",
         inputSchema={
             "type": "object",
-            "properties": {"planId": {"type": "string"}},
-            "required": ["planId"],
+            "properties": {
+                "planId": {"type": "string"},
+                **_PROJECT_ID_PROP,
+            },
+            "required": ["planId", "project_id"],
         },
     ),
 ]
@@ -605,88 +678,75 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     if name not in _TOOL_NAMES:
         return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
 
-    # Memory tools use MemoryClient, not Neo4jClient
+    project_id = arguments.get("project_id")
+    if project_id is None:
+        return [TextContent(type="text", text=json.dumps({"error": "project_id is required"}))]
+
+    clients = _get_project_clients(project_id)
+
+    # Memory tools use project-scoped MemoryClient
     if name in _MEMORY_TOOL_NAMES:
-        mem = MemoryClient()
-        try:
-            match name:
-                case "memory.record_analysis":
-                    result = memory_record_analysis(arguments, mem)
-                case "memory.record_decision":
-                    result = memory_record_decision(arguments, mem)
-                case "memory.record_change":
-                    result = memory_record_change(arguments, mem)
-                case "memory.record_validation":
-                    result = memory_record_validation(arguments, mem)
-                case "memory.record_plan":
-                    result = memory_record_plan(arguments, mem)
-                case "memory.get_recent_context":
-                    result = memory_get_recent_context(arguments, mem)
-                case _:
-                    result = {"error": f"Unknown memory tool: {name}"}
-            return [TextContent(type="text", text=json.dumps(result))]
-        finally:
-            mem.close()
-
-    # DAG tools use DagClient
-    if name in _DAG_TOOL_NAMES:
-        dag = DagClient()
-        try:
-            match name:
-                case "dag.create_plan":
-                    result = dag_create_plan(arguments, dag)
-                case "dag.run_plan":
-                    result = dag_run_plan(arguments, dag)
-                case "dag.get_plan":
-                    result = dag_get_plan(arguments, dag)
-                case "dag.step_status":
-                    result = dag_step_status(arguments, dag)
-                case "dag.cancel_plan":
-                    result = dag_cancel_plan(arguments, dag)
-                case _:
-                    result = {"error": f"Unknown dag tool: {name}"}
-            return [TextContent(type="text", text=json.dumps(result))]
-        finally:
-            dag.close()
-
-    client = Neo4jClient()
-    try:
         match name:
-            case "graph.search_entities":
-                result = search_entities(arguments, client)
-            case "graph.get_context":
-                result = get_context(arguments, client)
-            case "graph.get_neighbors":
-                result = get_neighbors(arguments, client)
-            case "graph.impact_analysis":
-                result = impact_analysis(arguments, client)
-            case "graph.upsert_entities":
-                result = upsert_entities(arguments, client)
-            case "graph.upsert_relations":
-                result = upsert_relations(arguments, client)
-            case "scan.project":
-                client.close()
-                result = scan_project(arguments)
-                return [TextContent(type="text", text=json.dumps(result))]
-            case "scan.file":
-                client.close()
-                result = scan_file(arguments)
-                return [TextContent(type="text", text=json.dumps(result))]
-            case "scan.changed_files":
-                client.close()
-                result = scan_changed_files(arguments)
-                return [TextContent(type="text", text=json.dumps(result))]
-            case "project.snapshot":
-                client.close()
-                result = project_snapshot(arguments)
-                return [TextContent(type="text", text=json.dumps(result))]
-            case "project.status":
-                result = project_status(arguments, client)
-            case _:  # unreachable but satisfies type checker
-                result = {"error": f"Unknown tool: {name}"}
+            case "memory.record_analysis":
+                result = memory_record_analysis(arguments, clients.memory)
+            case "memory.record_decision":
+                result = memory_record_decision(arguments, clients.memory)
+            case "memory.record_change":
+                result = memory_record_change(arguments, clients.memory)
+            case "memory.record_validation":
+                result = memory_record_validation(arguments, clients.memory)
+            case "memory.record_plan":
+                result = memory_record_plan(arguments, clients.memory)
+            case "memory.get_recent_context":
+                result = memory_get_recent_context(arguments, clients.memory)
+            case _:
+                result = {"error": f"Unknown memory tool: {name}"}
         return [TextContent(type="text", text=json.dumps(result))]
-    finally:
-        client.close()
+
+    # DAG tools use project-scoped DagClient
+    if name in _DAG_TOOL_NAMES:
+        match name:
+            case "dag.create_plan":
+                result = dag_create_plan(arguments, clients.dag)
+            case "dag.run_plan":
+                result = dag_run_plan(arguments, clients.dag)
+            case "dag.get_plan":
+                result = dag_get_plan(arguments, clients.dag)
+            case "dag.step_status":
+                result = dag_step_status(arguments, clients.dag)
+            case "dag.cancel_plan":
+                result = dag_cancel_plan(arguments, clients.dag)
+            case _:
+                result = {"error": f"Unknown dag tool: {name}"}
+        return [TextContent(type="text", text=json.dumps(result))]
+
+    # Graph/project/scan tools
+    match name:
+        case "graph.search_entities":
+            result = search_entities(arguments, clients.neo4j)
+        case "graph.get_context":
+            result = get_context(arguments, clients.neo4j)
+        case "graph.get_neighbors":
+            result = get_neighbors(arguments, clients.neo4j)
+        case "graph.impact_analysis":
+            result = impact_analysis(arguments, clients.neo4j)
+        case "graph.upsert_entities":
+            result = upsert_entities(arguments, clients.neo4j)
+        case "graph.upsert_relations":
+            result = upsert_relations(arguments, clients.neo4j)
+        case "scan.project":
+            result = scan_project(arguments)
+        case "scan.file":
+            result = scan_file(arguments)
+        case "scan.changed_files":
+            result = scan_changed_files(arguments)
+        case "project.snapshot":
+            result = project_snapshot(arguments)
+        case "project.status":
+            result = project_status(arguments, clients.neo4j)
+        case _:  # unreachable but satisfies type checker
+            result = {"error": f"Unknown tool: {name}"}
+    return [TextContent(type="text", text=json.dumps(result))]
 
 
 @server.list_resources()
@@ -694,24 +754,47 @@ async def list_resources() -> list[Resource]:
     return RESOURCES
 
 
+def _parse_resource_project_id(uri_str: str) -> tuple[str, str | None]:
+    """Split URI into base and optional project_id from query string.
+
+    E.g. 'project://summary?project_id=/path/to/proj' -> ('project://summary', '/path/to/proj')
+    """
+    if "?project_id=" in uri_str:
+        base, encoded = uri_str.split("?project_id=", 1)
+        from urllib.parse import unquote
+        return base, unquote(encoded)
+    return uri_str, None
+
+
 @server.read_resource()
 async def read_resource(uri: AnyUrl) -> str:
     uri_str = str(uri)
-    if uri_str == "project://schema":
+    base_uri, project_id = _parse_resource_project_id(uri_str)
+
+    if base_uri == "project://schema":
         return get_schema()
-    if uri_str == "project://summary":
+    if base_uri == "project://summary":
+        if project_id:
+            client = _get_project_clients(project_id).neo4j
+            return get_summary(client)
         client = Neo4jClient()
         try:
             return get_summary(client)
         finally:
             client.close()
-    if uri_str == "project://recent-decisions":
+    if base_uri == "project://recent-decisions":
+        if project_id:
+            mem = _get_project_clients(project_id).memory
+            return get_recent_decisions(mem)
         mem = MemoryClient()
         try:
             return get_recent_decisions(mem)
         finally:
             mem.close()
-    if uri_str == "project://open-plans":
+    if base_uri == "project://open-plans":
+        if project_id:
+            dag = _get_project_clients(project_id).dag
+            return get_open_plans(dag)
         dag = DagClient()
         try:
             return get_open_plans(dag)
