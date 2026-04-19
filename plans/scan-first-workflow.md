@@ -111,9 +111,9 @@ Replace the `rei dev` command with a `rei service` group containing `start` and 
 
 ### Acceptance criteria
 
-- [ ] `rei service start` starts Neo4j via docker compose and prints status
-- [ ] `rei service stop` stops Neo4j via docker compose down and prints status
-- [ ] `rei dev` is no longer a registered command
-- [ ] `rei --help` shows `service` but not `dev`
-- [ ] Both subcommands use the bundled compose file (same resolution as Phase 2 auto-start)
-- [ ] Existing `test_dev.py` tests are migrated to test the new `service` command
+- [x] `rei service start` starts Neo4j via docker compose and prints status
+- [x] `rei service stop` stops Neo4j via docker compose down and prints status
+- [x] `rei dev` is no longer a registered command
+- [x] `rei --help` shows `service` but not `dev`
+- [x] Both subcommands use the bundled compose file (same resolution as Phase 2 auto-start)
+- [x] Existing `test_dev.py` tests are migrated to test the new `service` command

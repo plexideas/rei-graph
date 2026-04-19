@@ -3,8 +3,8 @@ import importlib.metadata
 import click
 
 from rei_cli.commands.delete_project import delete_project
-from rei_cli.commands.dev import dev
 from rei_cli.commands.doctor import doctor
+from rei_cli.commands.service import service
 from rei_cli.commands.impact import impact
 from rei_cli.commands.init import init
 from rei_cli.commands.mcp import mcp_command
@@ -26,7 +26,7 @@ def cli():
 
 
 cli.add_command(init)
-cli.add_command(dev)
+cli.add_command(service)
 cli.add_command(doctor)
 cli.add_command(scan)
 cli.add_command(snapshot)
