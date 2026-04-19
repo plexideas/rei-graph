@@ -7,8 +7,6 @@ build/
 *.egg
 .venv/
 
-# uv
-uv.lock
 
 # Environment
 .env
