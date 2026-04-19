@@ -72,8 +72,8 @@ class ScanProgress:
         """Stop the bar/spinner and print the enriched summary, then any warnings."""
         self.stop()
         self._console.print(
-            f"Done in {elapsed:.1f}s: {total_nodes} nodes, {total_rels} rels "
-            f"from {self._file_count} files"
+            f"✓ Graph updated: {total_nodes} nodes, {total_rels} rels "
+            f"from {self._file_count} files in {elapsed:.1f}s"
         )
         if self._warnings:
             self._console.print(f"{len(self._warnings)} warning(s):")

@@ -45,10 +45,10 @@ def _find_ingester() -> Path:
     raise FileNotFoundError("TS ingester not found. Run 'npm run build' in packages/ingester_ts/")
 
 
-def _resolve_project(root: Path) -> str:
+def _resolve_project(root: Path) -> tuple[str, str]:
     """Resolve project identity for *root*, auto-creating .rei/project.toml if needed.
 
-    Returns the canonical absolute path (project_id).
+    Returns ``(project_id, project_name)``.
     """
     project_id = str(root.resolve())
     config_path = root / ".rei" / "project.toml"
@@ -56,7 +56,12 @@ def _resolve_project(root: Path) -> str:
         project_name = root.resolve().name
         config = generate_default_config(project_name, project_id=project_id)
         write_config(config_path, config)
-    return project_id
+    else:
+        try:
+            project_name = read_config(config_path).get("project", {}).get("name") or root.resolve().name
+        except Exception:
+            project_name = root.resolve().name
+    return project_id, project_name
 
 
 def _parse_ingester_output(raw: str) -> ScanResult:
@@ -205,7 +210,7 @@ def _get_deleted_files_since(root: Path, since: str) -> list[str]:
 
 
 @click.command()
-@click.argument("file_path")
+@click.argument("file_path", default=".", required=False)
 @click.option("--changed", is_flag=True, default=False, help="Only scan git-changed files")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Print per-file node/rel counts")
 @click.option("--force", is_flag=True, default=False, help="Force full rescan even if project was scanned before")
@@ -218,8 +223,10 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
 
     # Resolve project identity (auto-init .rei/project.toml if missing)
     project_root = path if path.is_dir() else path.parent
-    project_id = _resolve_project(project_root)
+    project_id, project_name = _resolve_project(project_root)
     prefix = project_hash(project_id)
+
+    click.echo(f"✓ Project: {project_name}")
 
     if changed:
         _scan_changed(path, verbose=verbose, project_id=project_id, project_prefix=prefix)
@@ -227,14 +234,15 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
 
     # Repeat-scan detection: check if project was already scanned
     client = Neo4jClient(project_id=project_id)
+    click.echo("✓ Neo4j: connected")
     try:
         project_info = client.get_project()
         if project_info and project_info.get("last_scanned_at") and not force:
             last_ts = project_info["last_scanned_at"]
-            click.echo(
-                f"Project already scanned (last: {last_ts}). "
-                f"Running incremental scan. Use --force for full rescan."
-            )
+            changed_files = _get_changed_files_since(project_root, last_ts)
+            deleted_files = _get_deleted_files_since(project_root, last_ts)
+            file_count = len(changed_files) + len(deleted_files)
+            click.echo(f"✓ Mode: incremental ({file_count} file(s) changed)")
             _scan_changed_since(
                 path,
                 since=last_ts,
@@ -259,6 +267,7 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
         if not files:
             click.echo("No TS/TSX files found to scan.")
             return
+        click.echo(f"✓ Mode: full scan ({len(files)} files)")
 
         progress = ScanProgress(total=len(files), verbose=verbose)
         progress.start()
@@ -289,6 +298,7 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
         client.update_last_scanned()
         progress.finish(elapsed=elapsed, total_nodes=total_nodes, total_rels=total_rels)
     else:
+        click.echo("✓ Mode: full scan (1 file)")
         start_time = time.monotonic()
         progress = ScanProgress(total=1, verbose=verbose)
         progress.start()

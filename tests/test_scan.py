@@ -467,7 +467,7 @@ def test_scan_directory_summary_contains_elapsed_time(tmp_path):
         result = runner.invoke(cli, ["scan", str(tmp_path)])
 
         assert result.exit_code == 0
-        assert "Done in" in result.output
+        assert "Graph updated" in result.output
         assert "nodes" in result.output
         assert "rels" in result.output
         assert "files" in result.output
@@ -591,9 +591,9 @@ def test_scan_directory_no_inline_warnings(tmp_path):
         result = runner.invoke(cli, ["scan", str(tmp_path)])
 
         assert result.exit_code == 0
-        # Warning must NOT appear before the summary line ("Done in...")
+        # Warning must NOT appear before the summary line ("Graph updated...")
         output = result.output
-        done_pos = output.lower().find("done in")
+        done_pos = output.lower().find("graph updated")
         assert done_pos >= 0, "Summary line should be present"
         # Inline inline "Warning:" should NOT appear before the summary
         pre_summary = output[:done_pos]
@@ -628,7 +628,7 @@ def test_scan_single_file_output_contains_summary(tmp_path):
         result = runner.invoke(cli, ["scan", str(ts_file)])
 
         assert result.exit_code == 0
-        assert "Done in" in result.output
+        assert "Graph updated" in result.output
         assert "nodes" in result.output
         assert "rels" in result.output
 
@@ -680,7 +680,7 @@ def test_scan_changed_summary_contains_elapsed_time(tmp_path):
         result = runner.invoke(cli, ["scan", str(tmp_path), "--changed"])
 
         assert result.exit_code == 0
-        assert "Done in" in result.output
+        assert "Graph updated" in result.output
         assert "nodes" in result.output
         assert "rels" in result.output
         assert "files" in result.output
@@ -1080,9 +1080,8 @@ def test_scan_known_project_prints_warning_and_runs_incremental(tmp_path):
         result = runner.invoke(cli, ["scan", str(tmp_path)])
 
         assert result.exit_code == 0
-        # Warning should mention last scan timestamp and incremental
-        assert "already scanned" in result.output.lower() or "incremental" in result.output.lower()
-        assert last_scanned in result.output
+        # Mode label should show incremental
+        assert "incremental" in result.output.lower()
         # Should NOT do a full directory scan — should use git log --since
         git_calls = [c for c in mock_subprocess.run.call_args_list if c[0][0][0] == "git"]
         assert len(git_calls) >= 1
@@ -1302,3 +1301,133 @@ def test_find_ingester_falls_back_to_dev_path_when_bundled_absent(tmp_path):
         result = _find_ingester()
 
     assert result == dev_cli
+
+
+# ── Plan Phase 1: Optional path + phased scan output ─────────────────────────
+
+def test_scan_no_argument_uses_cwd(tmp_path):
+    """rei scan with no argument scans the current directory (no 'Missing argument' error)."""
+    import os
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "myapp"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            runner = CliRunner()
+            result = runner.invoke(cli, ["scan"])
+        finally:
+            os.chdir(old_cwd)
+
+        assert result.exit_code == 0
+        assert "Missing argument" not in result.output
+        assert result.output != ""
+
+
+def test_scan_output_contains_phase_lines_full_scan(tmp_path):
+    """rei scan shows ✓ Project:, ✓ Neo4j: connected, ✓ Mode: full scan, ✓ Graph updated: lines."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "myapp"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = SAMPLE_INGESTER_OUTPUT
+        mock_result.stderr = ""
+        mock_subprocess.run.return_value = mock_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "✓ Project:" in result.output
+        assert "✓ Neo4j: connected" in result.output
+        assert "✓ Mode: full scan" in result.output
+        assert "✓ Graph updated:" in result.output
+
+
+def test_scan_output_incremental_mode_label(tmp_path):
+    """rei scan on a known project shows '✓ Mode: incremental' phase line."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    last_scanned = "2026-04-18T10:00:00+00:00"
+
+    git_log_result = MagicMock()
+    git_log_result.returncode = 0
+    git_log_result.stdout = "src/app.ts\n"
+
+    git_log_deleted_result = MagicMock()
+    git_log_deleted_result.returncode = 0
+    git_log_deleted_result.stdout = ""
+
+    ingester_result = MagicMock()
+    ingester_result.returncode = 0
+    ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+    ingester_result.stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git" and "--diff-filter=D" in cmd:
+            return git_log_deleted_result
+        if cmd[0] == "git":
+            return git_log_result
+        return ingester_result
+
+    with patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client.get_project.return_value = {
+            "id": str(tmp_path.resolve()),
+            "last_scanned_at": last_scanned,
+        }
+        mock_client_cls.return_value = mock_client
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "✓ Mode: incremental" in result.output
