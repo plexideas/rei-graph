@@ -1,5 +1,6 @@
 import click
 
+from dgk_cli.commands.delete_project import delete_project
 from dgk_cli.commands.dev import dev
 from dgk_cli.commands.doctor import doctor
 from dgk_cli.commands.impact import impact
@@ -27,3 +28,4 @@ cli.add_command(impact)
 cli.add_command(plan)
 cli.add_command(plans)
 cli.add_command(mcp_command, name="mcp")
+cli.add_command(delete_project)

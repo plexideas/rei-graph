@@ -532,3 +532,49 @@ class TestNeo4jClientProjectLookup:
         client.update_last_scanned()
 
         mock_session.run.assert_not_called()
+
+
+class TestNeo4jClientDeleteProject:
+    """Tests for delete_project method — Phase 7."""
+
+    def test_delete_project_removes_all_nodes_with_detach_delete(self):
+        """delete_project issues DETACH DELETE for all nodes with the project_id."""
+        client = _make_scoped_client(PROJECT_A)
+        _, mock_session = _mock_driver(client)
+
+        client.delete_project()
+
+        cypher, params = mock_session.run.call_args[0]
+        assert "DETACH DELETE" in cypher
+        assert params["project_id"] == PROJECT_A
+
+    def test_delete_project_removes_project_registry_node(self):
+        """delete_project also removes the Project registry node."""
+        client = _make_scoped_client(PROJECT_A)
+        _, mock_session = _mock_driver(client)
+
+        client.delete_project()
+
+        # Should see at least one call that targets :Project or project_id
+        all_cypher = [c[0][0] for c in mock_session.run.call_args_list]
+        assert any("DETACH DELETE" in q for q in all_cypher)
+
+    def test_delete_project_noop_without_project_id(self):
+        """delete_project is a no-op when client has no project_id."""
+        client = Neo4jClient(uri="bolt://localhost:7687", user="neo4j", password="test")
+        _, mock_session = _mock_driver(client)
+
+        client.delete_project()
+
+        mock_session.run.assert_not_called()
+
+    def test_delete_project_does_not_affect_other_project(self):
+        """delete_project passes project_id=A, not B, so only project A is deleted."""
+        client_a = _make_scoped_client(PROJECT_A)
+        _, sess_a = _mock_driver(client_a)
+
+        client_a.delete_project()
+
+        cypher, params = sess_a.run.call_args[0]
+        assert params["project_id"] == PROJECT_A
+        assert PROJECT_B not in str(params)

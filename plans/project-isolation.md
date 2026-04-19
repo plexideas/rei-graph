@@ -133,14 +133,14 @@ Add `project_id` as a required parameter to every MCP tool's `inputSchema`. The 
 
 ### Acceptance criteria
 
-- [ ] Every MCP tool requires `project_id` in its input schema
-- [ ] Server caches client instances per `project_id` (lazy creation on first use)
-- [ ] `graph.search_entities` with different `project_id`s returns isolated results
-- [ ] `memory.get_recent_context` with different `project_id`s returns isolated results
-- [ ] `scan.project`, `scan.file`, `scan.changed_files` are scoped to the given `project_id`
-- [ ] MCP resources return scoped data when `project_id` is provided
-- [ ] Tests: MCP tool calls with different `project_id`s verify correct scoped clients are used
-- [ ] All existing tests pass (updated to include `project_id` in tool arguments)
+- [x] Every MCP tool requires `project_id` in its input schema
+- [x] Server caches client instances per `project_id` (lazy creation on first use)
+- [x] `graph.search_entities` with different `project_id`s returns isolated results
+- [x] `memory.get_recent_context` with different `project_id`s returns isolated results
+- [x] `scan.project`, `scan.file`, `scan.changed_files` are scoped to the given `project_id`
+- [x] MCP resources return scoped data when `project_id` is provided
+- [x] Tests: MCP tool calls with different `project_id` values verify correct scoped clients are used
+- [x] All existing tests pass (updated to include `project_id` in tool arguments)
 
 ---
 
@@ -154,9 +154,9 @@ Add a `delete_project(project_id: str)` method to `Neo4jClient` (or a standalone
 
 ### Acceptance criteria
 
-- [ ] `delete_project(project_id)` removes all nodes (code, memory, DAG, Project) with that `project_id` via `DETACH DELETE`
-- [ ] `dgk delete-project <path>` CLI command resolves path, confirms with user, then deletes
-- [ ] CLI command removes local `.dgk/` directory at the project path
-- [ ] MCP `project.delete(project_id)` tool calls delete without TTY prompt
-- [ ] Tests: after delete, queries for that `project_id` return no results; other projects are unaffected
-- [ ] All existing tests pass
+- [x] `delete_project(project_id)` removes all nodes (code, memory, DAG, Project) with that `project_id` via `DETACH DELETE`
+- [x] `dgk delete-project <path>` CLI command resolves path, confirms with user, then deletes
+- [x] CLI command removes local `.dgk/` directory at the project path
+- [x] MCP `project.delete(project_id)` tool calls delete without TTY prompt
+- [x] Tests: after delete, queries for that `project_id` return no results; other projects are unaffected
+- [x] All existing tests pass

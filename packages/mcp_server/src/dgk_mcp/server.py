@@ -180,6 +180,13 @@ def project_status(arguments: dict, client: Neo4jClient) -> dict:
     return {"neo4j": health, "nodeCount": node_count}
 
 
+def project_delete(arguments: dict, client: Neo4jClient) -> dict:
+    """project.delete: remove ALL nodes for the project from Neo4j."""
+    project_id = arguments.get("project_id", "")
+    client.delete_project()
+    return {"status": "deleted", "project_id": project_id}
+
+
 def get_schema() -> str:
     """project://schema: graph schema as text."""
     return (
@@ -610,6 +617,15 @@ TOOLS: list[Tool] = [
             "required": ["planId", "project_id"],
         },
     ),
+    Tool(
+        name="project.delete",
+        description="Delete all graph data (code nodes, memory, DAG plans, Project node) for a project",
+        inputSchema={
+            "type": "object",
+            "properties": {**_PROJECT_ID_PROP},
+            "required": ["project_id"],
+        },
+    ),
 ]
 
 RESOURCES: list[Resource] = [
@@ -744,6 +760,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = project_snapshot(arguments)
         case "project.status":
             result = project_status(arguments, clients.neo4j)
+        case "project.delete":
+            result = project_delete(arguments, clients.neo4j)
         case _:  # unreachable but satisfies type checker
             result = {"error": f"Unknown tool: {name}"}
     return [TextContent(type="text", text=json.dumps(result))]

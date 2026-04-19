@@ -7,6 +7,7 @@ from dgk_mcp.server import (
     get_schema,
     get_summary,
     impact_analysis,
+    project_delete,
     project_status,
     scan_file,
     scan_project,
@@ -854,4 +855,35 @@ class TestPhase6ScopedToolHandlers:
                 f"{tool_name} missing project_id"
             assert "project_id" in tool.inputSchema.get("required", []), \
                 f"{tool_name} does not require project_id"
+
+
+class TestPhase7ProjectDelete:
+    def test_project_delete_tool_in_tools_list(self):
+        """project.delete tool is present in TOOLS list."""
+        tool_names = {t.name for t in TOOLS}
+        assert "project.delete" in tool_names
+
+    def test_project_delete_tool_requires_project_id(self):
+        """project.delete tool requires project_id in inputSchema."""
+        tool_map = {t.name: t for t in TOOLS}
+        tool = tool_map["project.delete"]
+        assert "project_id" in tool.inputSchema.get("required", [])
+
+    def test_project_delete_calls_delete_project_on_client(self):
+        """project_delete() calls Neo4jClient.delete_project for the given project_id."""
+        mock_client = MagicMock()
+        result = project_delete({"project_id": "/project/alpha"}, mock_client)
+        mock_client.delete_project.assert_called_once()
+        assert result["status"] == "deleted"
+        assert "/project/alpha" in result["project_id"]
+
+    def test_project_delete_does_not_delete_other_project(self):
+        """project_delete called with project A does not call delete on project B's client."""
+        mock_client_a = MagicMock()
+        mock_client_b = MagicMock()
+
+        project_delete({"project_id": "/project/alpha"}, mock_client_a)
+
+        mock_client_a.delete_project.assert_called_once()
+        mock_client_b.delete_project.assert_not_called()
 

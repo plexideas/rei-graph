@@ -263,3 +263,17 @@ class Neo4jClient:
                     "last_scanned_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
+
+    def delete_project(self) -> None:
+        """Delete ALL nodes (code, memory, DAG, Project registry) for this project.
+
+        Uses DETACH DELETE to remove nodes and all their relationships atomically.
+        No-op when no project_id is set.
+        """
+        if not self.project_id:
+            return
+        with self._driver.session() as session:
+            session.run(
+                "MATCH (n) WHERE n.project_id = $project_id DETACH DELETE n",
+                {"project_id": self.project_id},
+            )
