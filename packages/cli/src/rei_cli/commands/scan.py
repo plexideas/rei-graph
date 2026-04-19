@@ -26,6 +26,7 @@ _PACKAGE_INGESTER_PATH: Path = Path(__file__).resolve().parent / "_ingester" / "
 _PACKAGE_COMPOSE_PATH: Path = Path(__file__).resolve().parent / "_compose" / "docker-compose.yml"
 
 _DOCKER_INSTALL_URL = "https://docs.docker.com/get-docker/"
+_NODE_INSTALL_URL = "https://nodejs.org/"
 _SERVICE_TIMEOUT_DEFAULT = 30
 
 
@@ -309,6 +310,42 @@ def _print_next_steps() -> None:
     )
 
 
+def _check_node_available() -> bool:
+    """Check Node.js is installed. Prints an actionable error if not found.
+
+    Returns True when node is available, False when absent (caller should
+    exit with a non-zero code).
+    """
+    if shutil.which("node") is None:
+        click.echo(
+            "\u2717 Node.js not found. The TypeScript parser requires Node.js >= 18.\n"
+            f"  Install it: {_NODE_INSTALL_URL}"
+        )
+        return False
+    return True
+
+
+def _check_git_repo(root: Path) -> tuple[bool, str]:
+    """Check if git is available and *root* is inside a git repository.
+
+    Returns ``(True, "")`` when git is usable for incremental detection.
+    Returns ``(False, note)`` when git is unavailable or the directory is not
+    a git repository; the caller should print the note and fall back to a
+    full scan.
+    """
+    if not shutil.which("git"):
+        return False, "Git is not available. Falling back to full scan."
+    result = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        capture_output=True,
+        text=True,
+        cwd=root,
+    )
+    if result.returncode != 0:
+        return False, "Not a git repository. Falling back to full scan."
+    return True, ""
+
+
 @click.command()
 @click.argument("file_path", default=".", required=False)
 @click.option("--changed", is_flag=True, default=False, help="Only scan git-changed files")
@@ -335,6 +372,10 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
     if not _ensure_neo4j_ready():
         sys.exit(1)
 
+    # Phase 4: Verify Node.js is available before any ingester usage
+    if not _check_node_available():
+        sys.exit(1)
+
     if changed:
         _scan_changed(path, verbose=verbose, project_id=project_id, project_prefix=prefix)
         return
@@ -347,20 +388,24 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
         if project_info and project_info.get("last_scanned_at"):
             is_first_scan = False
             if not force:
-                last_ts = project_info["last_scanned_at"]
-                changed_files = _get_changed_files_since(project_root, last_ts)
-                deleted_files = _get_deleted_files_since(project_root, last_ts)
-                file_count = len(changed_files) + len(deleted_files)
-                click.echo(f"✓ Mode: incremental ({file_count} file(s) changed)")
-                _scan_changed_since(
-                    path,
-                    since=last_ts,
-                    verbose=verbose,
-                    project_id=project_id,
-                    project_prefix=prefix,
-                    client=client,
-                )
-                return
+                git_ok, git_note = _check_git_repo(project_root)
+                if not git_ok:
+                    click.echo(f"  Note: {git_note}")
+                else:
+                    last_ts = project_info["last_scanned_at"]
+                    changed_files = _get_changed_files_since(project_root, last_ts)
+                    deleted_files = _get_deleted_files_since(project_root, last_ts)
+                    file_count = len(changed_files) + len(deleted_files)
+                    click.echo(f"\u2713 Mode: incremental ({file_count} file(s) changed)")
+                    _scan_changed_since(
+                        path,
+                        since=last_ts,
+                        verbose=verbose,
+                        project_id=project_id,
+                        project_prefix=prefix,
+                        client=client,
+                    )
+                    return
     except Exception:
         pass
 
@@ -391,8 +436,19 @@ def scan(file_path: str, changed: bool, verbose: bool, force: bool):
                     progress.add_warning(warning)
                 if scan_result:
                     client.delete_file_nodes(scan_result.file)
-                    client.upsert_nodes(scan_result.nodes)
-                    client.upsert_relationships(scan_result.relationships)
+                    try:
+                        client.upsert_nodes(scan_result.nodes)
+                        client.upsert_relationships(scan_result.relationships)
+                    except Exception:
+                        progress.stop()
+                        click.echo(
+                            "\u2717 Failed to write to the graph during scan.\n"
+                            "  Neo4j may have become unavailable. Run: rei doctor"
+                        )
+                        if verbose:
+                            import traceback as _traceback
+                            _traceback.print_exc()
+                        sys.exit(1)
                     total_nodes += len(scan_result.nodes)
                     total_rels += len(scan_result.relationships)
                 progress.advance(

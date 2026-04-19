@@ -1889,3 +1889,217 @@ def test_scan_force_flag_does_not_show_next_steps_on_known_project(tmp_path):
 
         assert result.exit_code == 0
         assert "Next steps" not in result.output
+
+
+# ── Phase 4: Action-oriented errors and graceful fallbacks ────────────────────
+
+def test_scan_node_not_found_exits_with_install_link(tmp_path):
+    """When Node.js is not installed, rei scan exits 1 with a clear message and install link."""
+    _make_scan_env(tmp_path)
+
+    with patch("rei_cli.commands.scan.shutil") as mock_shutil, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        # All shutil.which() calls return None (node not found)
+        mock_shutil.which.return_value = None
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+        mock_find.return_value = Path("/fake/cli.js")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "Node.js" in result.output
+        assert "https://nodejs.org/" in result.output
+
+
+def test_scan_git_unavailable_falls_back_to_full_scan_with_note(tmp_path):
+    """When git is not installed on a repeat project, falls back to full scan with a note."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    with patch("rei_cli.commands.scan.shutil") as mock_shutil, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        def which_fn(cmd):
+            if cmd == "git":
+                return None  # git not available
+            return "/usr/bin/node"  # node available
+
+        mock_shutil.which.side_effect = which_fn
+        mock_find.return_value = Path("/fake/cli.js")
+
+        ingester_result = MagicMock()
+        ingester_result.returncode = 0
+        ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+        ingester_result.stderr = ""
+        mock_subprocess.run.return_value = ingester_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        # Known project — would normally trigger incremental
+        mock_client.get_project.return_value = {
+            "id": str(tmp_path.resolve()),
+            "last_scanned_at": "2026-04-18T10:00:00+00:00",
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Note about git fallback should be in output
+        assert "git" in result.output.lower()
+        assert "full scan" in result.output.lower()
+        # Scan completed successfully
+        assert "Graph updated" in result.output
+
+
+def test_scan_non_git_directory_falls_back_to_full_scan_with_note(tmp_path):
+    """When git is available but the project is not a git repo, falls back to full scan with note."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("export function app() {}")
+    (tmp_path / ".rei").mkdir()
+    (tmp_path / ".rei" / "project.toml").write_text(
+        '[project]\nname = "test"\n[scan]\ninclude = ["src"]\nexclude = []\n'
+    )
+
+    def fake_run(cmd, **kwargs):
+        r = MagicMock()
+        if cmd[0] == "git" and "rev-parse" in cmd:
+            r.returncode = 128  # not a git repo
+            r.stdout = ""
+            r.stderr = "fatal: not a git repository"
+            return r
+        # node ingester
+        r.returncode = 0
+        r.stdout = SAMPLE_INGESTER_OUTPUT
+        r.stderr = ""
+        return r
+
+    with patch("rei_cli.commands.scan.shutil") as mock_shutil, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess, \
+         patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find:
+
+        def which_fn(cmd):
+            if cmd == "git":
+                return "/usr/bin/git"  # git installed
+            return "/usr/bin/node"  # node available
+
+        mock_shutil.which.side_effect = which_fn
+        mock_find.return_value = Path("/fake/cli.js")
+        mock_subprocess.run.side_effect = fake_run
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        # Known project
+        mock_client.get_project.return_value = {
+            "id": str(tmp_path.resolve()),
+            "last_scanned_at": "2026-04-18T10:00:00+00:00",
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 0
+        # Note about non-git fallback should be in output
+        assert "git" in result.output.lower() or "repository" in result.output.lower()
+        assert "full scan" in result.output.lower()
+        assert "Graph updated" in result.output
+
+
+def test_scan_neo4j_error_during_scan_shows_actionable_message(tmp_path):
+    """When Neo4j becomes unavailable mid-scan (upsert fails), shows actionable error."""
+    _make_scan_env(tmp_path)
+
+    with patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        ingester_result = MagicMock()
+        ingester_result.returncode = 0
+        ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+        ingester_result.stderr = ""
+        mock_subprocess.run.return_value = ingester_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+        mock_client.upsert_nodes.side_effect = Exception("ServiceUnavailable: connection refused")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "Neo4j" in result.output
+        assert "rei doctor" in result.output
+
+
+def test_scan_no_traceback_without_verbose_on_unexpected_error(tmp_path):
+    """Unexpected errors during scan don't show raw Python tracebacks without --verbose."""
+    _make_scan_env(tmp_path)
+
+    with patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        ingester_result = MagicMock()
+        ingester_result.returncode = 0
+        ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+        ingester_result.stderr = ""
+        mock_subprocess.run.return_value = ingester_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+        mock_client.upsert_nodes.side_effect = RuntimeError("Connection lost")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "Traceback" not in result.output
+        # The exception was handled cleanly (not an unhandled RuntimeError)
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+def test_scan_verbose_flag_shows_traceback_on_unexpected_error(tmp_path):
+    """With --verbose, unexpected errors include Python traceback details."""
+    _make_scan_env(tmp_path)
+
+    with patch("rei_cli.commands.scan.Neo4jClient") as mock_client_cls, \
+         patch("rei_cli.commands.scan._find_ingester") as mock_find, \
+         patch("rei_cli.commands.scan.subprocess") as mock_subprocess:
+
+        mock_find.return_value = Path("/fake/cli.js")
+        ingester_result = MagicMock()
+        ingester_result.returncode = 0
+        ingester_result.stdout = SAMPLE_INGESTER_OUTPUT
+        ingester_result.stderr = ""
+        mock_subprocess.run.return_value = ingester_result
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.get_project.return_value = None
+        mock_client.upsert_nodes.side_effect = RuntimeError("Connection lost")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(tmp_path), "--verbose"])
+
+        assert result.exit_code == 1
+        # Traceback details should appear in verbose mode
+        assert "Traceback" in result.output or "RuntimeError" in result.output

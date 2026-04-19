@@ -91,13 +91,13 @@ Replace raw exceptions with structured error messages following the "what happen
 
 ### Acceptance criteria
 
-- [ ] Node.js not found produces: clear message + install link + exit 1
-- [ ] Git unavailable falls back to full scan with a note in output (no crash)
-- [ ] Non-git project directory falls back to full scan with a note
-- [ ] Neo4j connection errors during scan (not pre-check) produce actionable messages
-- [ ] No raw Python tracebacks shown to user without `--verbose`
-- [ ] `--verbose` flag includes traceback details for all error paths
-- [ ] Tests verify each error scenario produces expected output strings and exit codes
+- [x] Node.js not found produces: clear message + install link + exit 1
+- [x] Git unavailable falls back to full scan with a note in output (no crash)
+- [x] Non-git project directory falls back to full scan with a note
+- [x] Neo4j connection errors during scan (not pre-check) produce actionable messages
+- [x] No raw Python tracebacks shown to user without `--verbose`
+- [x] `--verbose` flag includes traceback details for all error paths
+- [x] Tests verify each error scenario produces expected output strings and exit codes
 
 ---
 
